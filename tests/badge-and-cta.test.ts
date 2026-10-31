@@ -19,6 +19,9 @@ function relay(answer: unknown | number | Error) {
   )
 }
 
+/** The badge's words: its text without the decorative symbol (which is hidden from assistive technology). */
+const words = (w: ReturnType<typeof mount>) => w.text().replace(w.find('.mw-badge__symbol').exists() ? w.get('.mw-badge__symbol').text() : '', '')
+
 async function badge(host = 'https://relay.example') {
   const w = mount(TipConfigBadge, { props: { host } })
   await flushPromises()
@@ -36,44 +39,55 @@ describe('TipConfigBadge (F9)', () => {
 
   it('shows a figure for a known tip, and "from" for a linear schedule', async () => {
     relay({ send_tip: { kind: { const: 100_000 } } })
-    expect((await badge()).text()).toBe('● Relay online · tip 0.0001 SUI')
+    expect(words(await badge())).toBe('Relay online · tip 0.0001 SUI')
     relay({ send_tip: { kind: { linear: { base: 1_000_000, encoded_size_mul_per_kib: 10 } } } })
-    expect((await badge()).text()).toBe('● Relay online · tip from 0.001 SUI')
+    expect(words(await badge())).toBe('Relay online · tip from 0.001 SUI')
   })
 
   it('says "no tip" only for a relay that advertises none', async () => {
     relay('no_tip')
     const w = await badge()
-    expect(w.text()).toBe('● Relay online · tip no tip')
+    expect(words(w)).toBe('Relay online · tip no tip')
     expect(w.attributes('data-tip')).toBe('none')
   })
 
   it('does not call an over-ceiling tip "no tip"', async () => {
     relay({ send_tip: { kind: { const: (MAX_TIP_MIST + 1n).toString() } } })
     const w = await badge()
-    expect(w.text()).toBe('● Relay online · tip above the limit')
-    expect(w.text()).not.toContain('no tip')
+    expect(words(w)).toBe('Relay online · tip above the limit')
+    expect(words(w)).not.toContain('no tip')
     expect(w.attributes('data-tip')).toBe('over-ceiling')
   })
 
   it('does not call an unreadable tip "no tip"', async () => {
     relay({ send_tip: 'garbage' })
     const w = await badge()
-    expect(w.text()).toBe('● Relay online · tip unknown')
+    expect(words(w)).toBe('Relay online · tip unknown')
     expect(w.attributes('data-tip')).toBe('unknown')
+  })
+
+  it('marks the state with a symbol that assistive technology does not read, and a tone', async () => {
+    relay(503)
+    const w = await badge()
+    expect(w.get('.mw-badge__symbol').attributes('aria-hidden')).toBe('true')
+    expect(w.classes()).toContain('mw-badge--danger')
+    relay({ send_tip: { kind: { const: 100_000 } } })
+    expect((await badge()).classes()).toContain('mw-badge--ok')
+    relay({ send_tip: 'garbage' })
+    expect((await badge()).classes()).toContain('mw-badge--warn')
   })
 
   it('shows an unreachable relay', async () => {
     relay(503)
-    expect((await badge()).text()).toBe('● Relay unreachable')
+    expect(words(await badge())).toBe('Relay unreachable')
     relay(new Error('offline'))
-    expect((await badge()).text()).toBe('● Relay unreachable')
+    expect(words(await badge())).toBe('Relay unreachable')
   })
 
   it('shows a configuration error for an invalid host instead of staying on "Checking relay…"', async () => {
     relay('no_tip')
     const w = await badge('http://relay.example')
-    expect(w.text()).toBe('● Relay address is not valid')
+    expect(words(w)).toBe('Relay address is not valid')
     expect(w.attributes('data-state')).toBe('invalid')
   })
 
@@ -85,10 +99,10 @@ describe('TipConfigBadge (F9)', () => {
     const w = mount(TipConfigBadge, { props: { host: 'https://old.example' } })
     await w.setProps({ host: 'https://new.example' })
     await flushPromises()
-    expect(w.text()).toBe('● Relay online · tip no tip')
+    expect(words(w)).toBe('Relay online · tip no tip')
     release(new Response(JSON.stringify({ send_tip: { kind: { const: 5 } } })))
     await flushPromises()
-    expect(w.text()).toBe('● Relay online · tip no tip') // the late answer for the old host did not overwrite it
+    expect(words(w)).toBe('Relay online · tip no tip') // the late answer for the old host did not overwrite it
   })
 })
 

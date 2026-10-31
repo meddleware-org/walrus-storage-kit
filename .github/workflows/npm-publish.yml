@@ -32,10 +32,12 @@ jobs:
         run: npm run lint
       - name: Unit tests
         run: npm test
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium firefox webkit
       - name: Real-browser contrast gate (every theme x season)
         run: npm run test:e2e
+        env:
+          E2E_BROWSERS: all
       - name: Build
         run: npm run build --if-present
       - name: Packed files (no tests, no gallery)

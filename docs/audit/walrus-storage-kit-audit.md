@@ -52,7 +52,7 @@ RUST, SITE, PLATFORM.
   consumed, `nft-gate:access:v2` proof, upload through the Worker). The proof is built by
   walrus-storage-client and access-gate-gateway-client, not by this library.
 
-**Review date:** 2026-09-18 (first pass, corpus) · **re-verified 2026-10-03** · **re-verified 2026-10-09** · **fix wave 2026-10-10** · **release status 2026-10-18**
+**Review date:** 2026-09-18 (first pass, corpus) · **re-verified 2026-10-03** · **re-verified 2026-10-09** · **fix wave 2026-10-10** · **release status 2026-10-18**; 0.1.36 re-verified 2026-10-31 (Token-only styling, ui components, gated upload composable)
 **Reviewer:** Internal review
 **Severity ceiling:** Medium.
 

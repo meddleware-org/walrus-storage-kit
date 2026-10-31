@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 // Accessibility smoke tests for the relay components' rendered markup (axe). Network-facing
-// composables are mocked; the shared @meddleware/ui primitives are stubbed because their prebuilt
-// dist does not render under these jsdom tests (separate Vue copy) — they are covered by
-// @meddleware/ui's own tests.
-import { describe, it, expect, vi } from 'vitest'
+// composables are mocked; the real @meddleware/ui primitives render.
+import { beforeAll, describe, it, expect, vi } from 'vitest'
+import { installDialogShim } from '@meddleware/frontend-config/vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { axe } from 'vitest-axe'
 import * as axeMatchers from 'vitest-axe/matchers'
@@ -31,7 +30,7 @@ const terms: PurchaseTerms = {
 HTMLCanvasElement.prototype.getContext = (() => null) as typeof HTMLCanvasElement.prototype.getContext
 const opts = { rules: { region: { enabled: false } } }
 
-vi.mock('@meddleware/ui', async () => import('./helpers/ui-stubs.js'))
+beforeAll(installDialogShim)
 
 vi.mock('../src/composables/useWalrusRelay.js', async () => {
   const { ref, computed } = await import('vue')

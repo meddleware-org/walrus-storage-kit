@@ -1,5 +1,6 @@
 // The accessibility gate jsdom cannot be: a real browser computes the colours, so axe's `color-contrast`
-// rule runs. Every state of the three components must have no WCAG 2.2 AA violation in every theme × season.
+// rule runs. Every state of the three components must have no WCAG 2.2 AA violation AND no AAA one (enhanced contrast, 7:1) in every
+// theme × season.
 import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 
@@ -8,7 +9,7 @@ const SEASONS = [null, 'spring', 'summer', 'autumn', 'winter'] as const
 
 async function audit(page: Page): Promise<void> {
   const results = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'])
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'wcag2aaa', 'best-practice'])
     .analyze()
   const summary = results.violations.map((v) => ({
     id: v.id,

@@ -17,6 +17,9 @@ export type {
   RelayOption,
 } from './composables/useWalrusRelay.js'
 
+export { useGatedUpload } from './composables/useGatedUpload.js'
+export type { AccessGateState, GatedAccessInput } from './composables/useGatedUpload.js'
+
 export { useAccessGate, PENDING_PURCHASE_MS } from './composables/useAccessGate.js'
 export type {
   RelayGateConfig,
@@ -42,6 +45,8 @@ export {
   requireHttpsHost,
   relayOrigin,
   walrusBlobUrl,
+  walruscanBlobUrl,
+  PUBLIC_WALRUS_RELAY_HOSTS,
   formatCoinAmount,
   formatCoinExact,
   WALRUS_AGGREGATOR_HOSTS,

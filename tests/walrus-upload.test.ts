@@ -2,8 +2,9 @@
 // The upload widget's money paths (F14): what is passed to the upload (epochs, permanence), the cost
 // line, the duplicate prompt, the certify retry and the same-registration upload retry, plus the
 // account/network reset and stale-result guard (F16). The relay composable is the real one, driven by a
-// stubbed `fetch`; only the two @meddleware/ui primitives are stand-ins.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// stubbed `fetch`; the real @meddleware/ui renders (the dialog needs the jsdom shim).
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installDialogShim } from '@meddleware/frontend-config/vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, h, markRaw, nextTick, ref, shallowRef } from 'vue'
 import {
@@ -15,7 +16,7 @@ import {
 } from '@meddleware/walrus-storage-client/flow'
 import WalrusUpload from '../src/components/WalrusUpload.vue'
 
-vi.mock('@meddleware/ui', async () => import('./helpers/ui-stubs.js'))
+beforeAll(installDialogShim)
 
 const PUB = 'https://public.example.com'
 const OP = 'https://operator.example.com'
@@ -109,7 +110,7 @@ describe('WalrusUpload: what is passed to the upload', () => {
     const w = mountWidget(perform)
     await flushPromises()
     await chooseFile(w)
-    const epochs = w.get('#wru-epochs')
+    const epochs = w.get('input[type="number"]')
     await epochs.setValue('999')
     await nextTick()
     expect((epochs.element as HTMLInputElement).value).toBe('53')
@@ -127,9 +128,9 @@ describe('WalrusUpload: what is passed to the upload', () => {
     await flushPromises()
     await chooseFile(w)
     await button(w, /^Short$/).trigger('click')
-    expect((w.get('#wru-epochs').element as HTMLInputElement).value).toBe('10')
+    expect((w.get('input[type="number"]').element as HTMLInputElement).value).toBe('10')
     await button(w, /^Max$/).trigger('click')
-    expect((w.get('#wru-epochs').element as HTMLInputElement).value).toBe('53')
+    expect((w.get('input[type="number"]').element as HTMLInputElement).value).toBe('53')
   })
 
   it('refuses a file over maxBytes before anything is uploaded', async () => {
@@ -174,7 +175,7 @@ describe('WalrusUpload: cost line', () => {
     await flushPromises()
     expect(w.get('.wru-cost').text()).toBe('Estimated cost: ~0.0530 WAL storage (53 epochs) + ~0.0020 SUI relay fee (+ gas)')
     await button(w, /^Change options$/).trigger('click')
-    await w.get('#wru-epochs').setValue('10')
+    await w.get('input[type="number"]').setValue('10')
     await flushPromises()
     await button(w, /^Next$/).trigger('click')
     await flushPromises()
@@ -215,7 +216,7 @@ describe('WalrusUpload: cost line', () => {
     await flushPromises()
     await chooseFile(w)
     await flushPromises()
-    await w.get('#wru-epochs').setValue('10')
+    await w.get('input[type="number"]').setValue('10')
     await flushPromises()
     expect(pending.length).toBeGreaterThanOrEqual(2)
     pending.at(-1)!(1_000_000n) // the current duration answers first
@@ -233,7 +234,7 @@ describe('WalrusUpload: approvals copy (F13)', () => {
     const w = mountWidget(vi.fn<Perform>(async () => result()), access ? { access, hosts } : { hosts })
     await flushPromises()
     await toReview(w)
-    return w.get('#wru-help').text()
+    return w.findAll('.wru-hint').map((h) => h.text()).join(' ')
   }
 
   it('is two approvals on an open relay', async () => {
@@ -503,7 +504,7 @@ describe('WalrusUpload: another account or network (F16)', () => {
     await flushPromises()
     expect(w.emitted('uploaded')).toBeUndefined()
     expect(w.emitted('settled')).toHaveLength(1) // the host still refreshes its views
-    expect(w.text()).not.toContain('Uploading to Walrus')
+    expect(w.find('dialog[open]').exists()).toBe(false) // the progress dialog closed
   })
 
   it('drops a failure, a duplicate prompt and a retry offer that arrive after the session changed', async () => {

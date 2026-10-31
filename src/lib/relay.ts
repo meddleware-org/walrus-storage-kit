@@ -2,6 +2,8 @@
 // `/v1/tip-config` endpoint. No Vue, no heavy deps — safe to import anywhere
 // (unit-testable in isolation; shared by `useWalrusRelay` and `TipConfigBadge`).
 
+import { formatCoinAmount, formatCoinExact, readBoundedJson as readBoundedJsonBody, walruscanBlobUrl } from '@meddleware/web-utils'
+
 /** A Walrus network. Walrus has no localnet — only testnet/mainnet exist. */
 export type WalrusNetwork = 'testnet' | 'mainnet'
 
@@ -131,39 +133,8 @@ export const MAX_TIP_CONFIG_BYTES = 16 * 1024
  *
  * @throws {Error} if the body is larger than `maxBytes` or is not JSON.
  */
-export async function readBoundedJson(res: Response, maxBytes = MAX_TIP_CONFIG_BYTES): Promise<unknown> {
-  const declared = Number(res.headers.get('content-length'))
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    await res.body?.cancel().catch(() => {})
-    throw new Error(`response body is larger than ${maxBytes} bytes`)
-  }
-  let text: string
-  if (res.body) {
-    const reader = res.body.getReader()
-    const chunks: Uint8Array[] = []
-    let total = 0
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      total += value.byteLength
-      if (total > maxBytes) {
-        await reader.cancel().catch(() => {})
-        throw new Error(`response body is larger than ${maxBytes} bytes`)
-      }
-      chunks.push(value)
-    }
-    const all = new Uint8Array(total)
-    let at = 0
-    for (const c of chunks) {
-      all.set(c, at)
-      at += c.byteLength
-    }
-    text = new TextDecoder().decode(all)
-  } else {
-    text = await res.text()
-    if (text.length > maxBytes) throw new Error(`response body is larger than ${maxBytes} bytes`)
-  }
-  return JSON.parse(text)
+export function readBoundedJson(res: Response, maxBytes = MAX_TIP_CONFIG_BYTES): Promise<unknown> {
+  return readBoundedJsonBody(res, maxBytes, 'The relay response')
 }
 
 /** `host` without trailing slashes, so a path can be appended. */
@@ -216,6 +187,12 @@ export const WALRUS_AGGREGATOR_HOSTS: Record<WalrusNetwork, string> = {
   mainnet: 'https://aggregator.walrus-mainnet.walrus.space',
 }
 
+/** The public Mysten upload relays: the fallback when an operator relay is not configured or is down. */
+export const PUBLIC_WALRUS_RELAY_HOSTS: Record<WalrusNetwork, string> = {
+  testnet: 'https://upload-relay.testnet.walrus.space',
+  mainnet: 'https://upload-relay.mainnet.walrus.space',
+}
+
 /** Hosts that may be reached over plain http (a local testbed). `URL` renders IPv6 in brackets. */
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]'])
 
@@ -256,27 +233,4 @@ export function walrusBlobUrl(network: WalrusNetwork, blobId: string, aggregator
  */
 export const MAX_SINGLE_RESERVATION_EPOCHS = 53
 
-/**
- * Format a SUI/WAL base-unit amount (MIST / FROST, i.e. ×1e-9) for display. Uses 4 decimals for
- * normal amounts, but for a tiny NON-zero value shows enough significant digits instead of rounding
- * to `0.0000` — so a real-but-small relay tip (e.g. 10_000 MIST = 0.00001 SUI) isn't shown as zero.
- *
- * @param base Amount in the 1e-9 base unit (MIST for SUI, FROST for WAL).
- * @param symbol Ticker to append (e.g. `SUI`, `WAL`).
- */
-export function formatCoinAmount(base: bigint, symbol: string): string {
-  if (base === 0n) return `0 ${symbol}`
-  const n = Number(base) / 1e9
-  const s = n >= 0.0001 ? n.toFixed(4) : n.toFixed(9).replace(/0+$/, '').replace(/\.$/, '')
-  return `${s} ${symbol}`
-}
-
-/**
- * A SUI/WAL base-unit amount written exactly (no rounding): `10_000_001n` is `0.010000001 SUI`. Used
- * where the user approves a payment, so the figure shown is the figure paid.
- */
-export function formatCoinExact(base: bigint, symbol: string): string {
-  const whole = base / 1_000_000_000n
-  const frac = (base % 1_000_000_000n).toString().padStart(9, '0').replace(/0+$/, '')
-  return `${whole}${frac ? `.${frac}` : ''} ${symbol}`
-}
+export { formatCoinAmount, formatCoinExact, walruscanBlobUrl }

@@ -4,6 +4,10 @@ All notable changes to `@meddleware/walrus-relay` are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [Semantic Versioning](https://semver.org/). Before 0.2.0, breaking changes ship as patch releases.
 
+## [0.1.36] - 2026-10-31
+
+- Token-only styling, ui components, gated upload composable
+
 ## [0.1.35] - 2026-10-24
 
 ### Changed

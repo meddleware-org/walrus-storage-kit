@@ -5,6 +5,7 @@
 import { createApp } from 'vue'
 import '@meddleware/design-tokens/tokens.css'
 import '@meddleware/design-tokens/seasons.css'
+import '@meddleware/ui/reset.css'
 import ComponentGallery from './ComponentGallery.vue'
 
 const params = new URLSearchParams(location.search)

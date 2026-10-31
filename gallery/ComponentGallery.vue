@@ -97,22 +97,16 @@ const estimateStorageCost = async (_size: number, epochs: number): Promise<bigin
 </template>
 
 <style>
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, sans-serif;
-}
 main {
-  max-width: 40rem;
+  max-width: var(--mw-content-narrow);
   margin: 0 auto;
-  padding: 1rem;
+  padding: var(--space-xs);
 }
 .list {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap: var(--space-2xs);
   padding: 0;
   list-style: none;
 }

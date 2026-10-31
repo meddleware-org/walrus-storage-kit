@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
+import { inlineMeddleware } from '@meddleware/frontend-config/vitest'
 
 export default defineConfig({
   plugins: [vue()],
@@ -11,5 +12,7 @@ export default defineConfig({
     // and run via vitest.integration.config.ts so the default `npm test` stays fast and offline.
     include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
     exclude: ['tests/integration/**', 'node_modules/**'],
+    // @meddleware/ui imports its own .css (each component brings its CSS), which Node cannot import: process it through Vite.
+    server: { deps: { inline: inlineMeddleware } },
   },
 })

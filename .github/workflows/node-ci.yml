@@ -53,11 +53,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Component gallery, every theme × season
         run: npm run test:e2e
+        env:
+          E2E_BROWSERS: all
 
   node24-compat:
     name: Node 24 compatibility (engines >=24)

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Reads a relay's `/v1/tip-config` and shows the current per-upload tip + reachability.
 // Purely presentational; uses the pure `probeRelay` helper (no wallet, no @mysten/walrus).
-import { ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
+import { UiBadge, type BadgeTone } from '@meddleware/ui'
 import { formatCoinExact, probeRelay, type RelayHealth } from '../lib/relay.js'
 
 const props = defineProps<{
@@ -48,43 +49,21 @@ function tipLabel(): string {
   }
   return 'unknown'
 }
+
+/** Down or invalid is a problem, an unreadable tip needs a look, a working relay is fine, and a check in flight is neutral. */
+const tone = computed<BadgeTone>(() => {
+  if (loading.value) return 'neutral'
+  if (invalid.value || !accessible.value) return 'danger'
+  return health.value.tipStatus === 'unknown' || health.value.tipStatus === 'over-ceiling' ? 'warn' : 'ok'
+})
+const state = computed(() => (loading.value ? 'loading' : invalid.value ? 'invalid' : accessible.value ? 'up' : 'down'))
 </script>
 
 <template>
-  <span
-    class="wru-badge"
-    :data-state="loading ? 'loading' : invalid ? 'invalid' : accessible ? 'up' : 'down'"
-    :data-tip="loading || invalid || !accessible ? undefined : health.tipStatus"
-  >
+  <UiBadge :tone="tone" :symbol="loading ? false : undefined" :data-state="state" :data-tip="state === 'up' ? health.tipStatus : undefined">
     <template v-if="loading">Checking relay…</template>
-    <template v-else-if="invalid">● Relay address is not valid</template>
-    <template v-else-if="accessible">● Relay online · tip {{ tipLabel() }}</template>
-    <template v-else>● Relay unreachable</template>
-  </span>
+    <template v-else-if="invalid">Relay address is not valid</template>
+    <template v-else-if="accessible">Relay online · tip {{ tipLabel() }}</template>
+    <template v-else>Relay unreachable</template>
+  </UiBadge>
 </template>
-
-<style scoped>
-.wru-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.85rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  border: 1px solid var(--border, #ded6cf);
-}
-.wru-badge[data-state='up'] {
-  color: var(--ok, #177542);
-}
-.wru-badge[data-state='down'],
-.wru-badge[data-state='invalid'] {
-  color: var(--danger, #b3261e);
-}
-.wru-badge[data-tip='unknown'],
-.wru-badge[data-tip='over-ceiling'] {
-  color: var(--accent, #b84527);
-}
-.wru-badge[data-state='loading'] {
-  color: var(--muted, #6e635c);
-}
-</style>

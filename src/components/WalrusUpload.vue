@@ -3,16 +3,14 @@
 // `@mysten/walrus` client and the wallet live in the consuming app, injected via
 // `performUpload`. This keeps `@meddleware/walrus-storage-kit` free of wasm/wallet
 // deps (preserving the lazy-load boundary) and wallet-agnostic. Relay selection +
-// tip estimation come from `useWalrusRelay`.
+// tip estimation come from `useWalrusRelay`. The steps, the progress dialog and the
+// recovery prompts are the components in `./upload/`; this file owns the state they share.
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
-import { UiDialog, UiStepper, type StepperStep } from '@meddleware/ui'
+import { UiButton, UiNotice, UiStepper, type StepperStep } from '@meddleware/ui'
+import { createOperationScope, errorMessage } from '@meddleware/web-utils'
 import { useWalrusRelay } from '../composables/useWalrusRelay.js'
 import type { WalrusRelayHosts, RelayAccessOptions } from '../composables/useWalrusRelay.js'
-import {
-  CORE_UPLOAD_STEPS,
-  GATED_UPLOAD_STEPS,
-  isUploadProgress,
-} from '../lib/upload-steps.js'
+import { isUploadProgress } from '../lib/upload-steps.js'
 import {
   getCertifyRetry,
   getUploadRetry,
@@ -23,6 +21,13 @@ import {
   type UploadStepKey,
 } from '@meddleware/walrus-storage-client/flow'
 import { MAX_SINGLE_RESERVATION_EPOCHS, formatCoinAmount } from '../lib/relay.js'
+import UploadFileStep from './upload/UploadFileStep.vue'
+import UploadStorageOptions from './upload/UploadStorageOptions.vue'
+import UploadRelayStatus from './upload/UploadRelayStatus.vue'
+import UploadRecovery from './upload/UploadRecovery.vue'
+import UploadProgressDialog from './upload/UploadProgress.vue'
+import UploadDuplicateDialog from './upload/UploadDuplicateDialog.vue'
+import UploadHint from './upload/UploadHint.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -98,10 +103,10 @@ const {
 } = useWalrusRelay(() => props.hosts, () => props.access)
 
 const uploading = ref(false)
-// Bumped whenever the wallet session changes (account, network or relay hosts) or the wallet
-// disconnects. An upload or retry that finishes under an older epoch belongs to the previous
-// session: its result and its held closures are dropped, never shown to the new one.
-let sessionEpoch = 0
+// Invalidated whenever the wallet session changes (account, network or relay hosts) or the wallet
+// disconnects. An upload or retry that finishes after that belongs to the previous session: its
+// result and its held closures are dropped, never shown to the new one.
+const session = createOperationScope()
 const status = ref('')
 const error = ref<string | null>(null)
 const fileName = ref('')
@@ -182,23 +187,11 @@ const pendingUpload = ref<(() => Promise<UploadResult>) | null>(null)
 const retryingUpload = ref(false)
 
 // Stepped-progress state. `activeStep` is set only when the app reports structured progress; if it
-// stays null (a legacy string-only caller), the modal falls back to the single status line.
+// stays null (a legacy string-only caller), the dialog falls back to the status line alone. A gated
+// upload spends an NFT use first, so it has an extra leading "Access" step: we switch to the gated
+// catalogue as soon as an `access` step is reported (the app only emits it when gating).
 const activeStep = ref<UploadStepKey | null>(null)
-// A gated upload spends an NFT use first, so it has an extra leading "Access" node. We switch to the
-// gated catalogue as soon as an `access` step is reported (the app only emits it when gating).
 const sawAccessStep = ref(false)
-const steps = computed(() => (sawAccessStep.value ? GATED_UPLOAD_STEPS : CORE_UPLOAD_STEPS))
-const activeIndex = computed(() =>
-  activeStep.value ? steps.value.findIndex((s) => s.key === activeStep.value) : -1,
-)
-
-/** Position of `key` relative to the active step: done | active | todo (for per-node styling). */
-function stepState(index: number): 'done' | 'active' | 'todo' {
-  if (activeIndex.value < 0) return 'todo'
-  if (index < activeIndex.value) return 'done'
-  if (index === activeIndex.value) return 'active'
-  return 'todo'
-}
 
 function onProgress(s: string | UploadProgress): void {
   if (isUploadProgress(s)) {
@@ -210,15 +203,15 @@ function onProgress(s: string | UploadProgress): void {
   }
 }
 
-// The progress dialog is a native modal (UiDialog): the page is inert and focus stays inside
-// while uploading. The Upload button is disabled during the upload, so the browser can't restore
-// focus to it on close — return focus there explicitly once it is enabled again.
-const uploadBtnRef = ref<HTMLButtonElement | null>(null)
+// The progress dialog is a native modal: the page is inert and focus stays inside while uploading. The
+// Upload button is disabled during the upload, so the browser can't restore focus to it on close —
+// return focus there explicitly once it is enabled again.
+const uploadBtn = ref<InstanceType<typeof UiButton> | null>(null)
 
 watch(uploading, async (isUploading) => {
   if (isUploading) return
   await nextTick()
-  uploadBtnRef.value?.focus()
+  ;(uploadBtn.value?.$el as HTMLElement | undefined)?.focus()
 })
 
 onMounted(() => {
@@ -236,13 +229,18 @@ const UPLOAD_STEPS: StepperStep[] = [
 ]
 const uploadStep = ref(0)
 
-/** Forget the chosen file and every held retry: they were made for another account, network or relay. */
-function resetSession(): void {
-  sessionEpoch++
+/** Drop the chosen file's outcome and every held retry: they belong to a file, account, network or relay that has changed. */
+function clearHeld(): void {
   error.value = null
   pendingCertify.value = null
   pendingUpload.value = null
   duplicate.value = null
+}
+
+/** Forget the chosen file and every held retry: they were made for another account, network or relay. */
+function resetSession(): void {
+  session.invalidate()
+  clearHeld()
   bytes = null
   fileName.value = ''
   fileSizeBytes.value = 0
@@ -263,14 +261,13 @@ watch(
   },
 )
 
-function onFile(e: Event): void {
-  error.value = null
-  pendingCertify.value = null
-  pendingUpload.value = null
-  duplicate.value = null
+// A newer choice supersedes a file still being read.
+let reading = 0
+async function onFile(f: File | null): Promise<void> {
+  const mine = ++reading
+  clearHeld()
   bytes = null
   fileName.value = ''
-  const f = (e.target as HTMLInputElement).files?.[0]
   if (!f) return
   if (props.maxBytes && f.size > props.maxBytes) {
     error.value = `File too large (max ${Math.round(props.maxBytes / 1024)} KB).`
@@ -278,12 +275,10 @@ function onFile(e: Event): void {
   }
   fileName.value = f.name
   fileSizeBytes.value = f.size
-  const reader = new FileReader()
-  reader.onload = () => {
-    bytes = new Uint8Array(reader.result as ArrayBuffer)
-    uploadStep.value = 1
-  }
-  reader.readAsArrayBuffer(f)
+  const read = new Uint8Array(await f.arrayBuffer())
+  if (mine !== reading) return
+  bytes = read
+  uploadStep.value = 1
 }
 
 async function upload(force = false): Promise<void> {
@@ -292,13 +287,10 @@ async function upload(force = false): Promise<void> {
     return
   }
   uploading.value = true
-  error.value = null
   activeStep.value = null
   sawAccessStep.value = false
-  pendingCertify.value = null
-  pendingUpload.value = null
-  duplicate.value = null
-  const epoch = sessionEpoch
+  clearHeld()
+  const current = session.begin()
   try {
     const result = await props.performUpload(bytes, {
       relayHost: selectedRelayHost.value,
@@ -307,9 +299,9 @@ async function upload(force = false): Promise<void> {
       deletable: !permanent.value,
       onStatus: onProgress,
     })
-    if (epoch === sessionEpoch) emit('uploaded', result)
+    if (current.isCurrent()) emit('uploaded', result)
   } catch (e) {
-    if (epoch !== sessionEpoch) return // the wallet session changed: this outcome is not for the new one
+    if (!current.isCurrent()) return // the wallet session changed: this outcome is not for the new one
     // The app aborted before registering because the wallet already owns this blob: offer to manage
     // the existing copy (Extend / Certify) instead of paying to upload a duplicate.
     const existing = getDuplicateExisting(e)
@@ -320,18 +312,15 @@ async function upload(force = false): Promise<void> {
     // If the upload landed but only certify failed, offer a retry instead of a hard error — the
     // blob is already stored and paid for; certifying it later costs only the certify gas.
     const retry = getCertifyRetry<UploadResult>(e)
-    const uploadRetry = getUploadRetry<UploadResult>(e)
     if (retry) {
       pendingCertify.value = retry
-    } else if (uploadRetry) {
-      pendingUpload.value = uploadRetry
-      error.value = e instanceof Error ? e.message : String(e)
     } else {
-      error.value = e instanceof Error ? e.message : String(e)
+      pendingUpload.value = getUploadRetry<UploadResult>(e)
+      error.value = errorMessage(e)
     }
   } finally {
-    // The transient step text only lives in the modal; the persistent "Uploaded ✓" is the
-    // host's result section. Clear it as the modal closes so it never lingers.
+    // The transient step text only lives in the dialog; the persistent "Uploaded ✓" is the
+    // host's result section. Clear it as the dialog closes so it never lingers.
     status.value = ''
     activeStep.value = null
     uploading.value = false
@@ -348,22 +337,21 @@ async function runPendingUpload(): Promise<void> {
   if (!retry || retryingUpload.value) return
   retryingUpload.value = true
   error.value = null
-  const epoch = sessionEpoch
+  const current = session.begin()
   try {
     const result = await retry()
-    if (epoch !== sessionEpoch) return
+    if (!current.isCurrent()) return
     pendingUpload.value = null
     emit('uploaded', result)
   } catch (e) {
-    if (epoch !== sessionEpoch) return
-    const next = getUploadRetry<UploadResult>(e)
+    if (!current.isCurrent()) return
     const certify = getCertifyRetry<UploadResult>(e)
     if (certify) {
       pendingUpload.value = null
       pendingCertify.value = certify
     } else {
-      pendingUpload.value = next
-      error.value = e instanceof Error ? e.message : String(e)
+      pendingUpload.value = getUploadRetry<UploadResult>(e)
+      error.value = errorMessage(e)
     }
   } finally {
     retryingUpload.value = false
@@ -394,16 +382,16 @@ async function runPendingCertify(): Promise<void> {
   if (!retry || certifying.value) return
   certifying.value = true
   error.value = null
-  const epoch = sessionEpoch
+  const current = session.begin()
   try {
     const result = await retry()
-    if (epoch !== sessionEpoch) return
+    if (!current.isCurrent()) return
     pendingCertify.value = null
     emit('uploaded', result)
   } catch (e) {
-    if (epoch !== sessionEpoch) return
+    if (!current.isCurrent()) return
     // Keep the pending state so the user can try again (e.g. they rejected the prompt once more).
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = errorMessage(e)
   } finally {
     certifying.value = false
     emit('settled')
@@ -413,490 +401,95 @@ async function runPendingCertify(): Promise<void> {
 
 <template>
   <div class="wru-upload">
-    <UiStepper :steps="UPLOAD_STEPS" v-model="uploadStep" />
+    <UiStepper v-model="uploadStep" :steps="UPLOAD_STEPS" />
 
-    <!-- Step 0: File picker -->
-    <template v-if="uploadStep === 0">
-      <input
-        type="file"
-        :accept="accept"
-        aria-label="Choose a file to upload to Walrus"
-        aria-describedby="wru-help"
-        @change="onFile"
-      />
-      <p v-if="error" class="wru-error" role="alert">{{ error }}</p>
-      <p id="wru-help" class="wru-hint">
-        Select a file to continue. Requires <strong>WAL</strong> (storage) and
-        <strong>SUI</strong> (gas + relay fee) in your wallet.
-      </p>
-    </template>
+    <UploadFileStep v-if="uploadStep === 0" :accept="accept" :error="error" @select="onFile" />
 
-    <!-- Step 1: Options (relay + duration) -->
+    <!-- Options: relay and storage -->
     <template v-else-if="uploadStep === 1">
-      <p class="wru-filename">
+      <p class="wru-file">
         <strong>{{ fileName }}</strong>
-        <button type="button" class="wru-change-file" @click="uploadStep = 0">Change file</button>
+        <UiButton variant="link" size="sm" @click="uploadStep = 0">Change file</UiButton>
       </p>
 
-      <p v-if="configError" class="wru-error" role="alert">
-        The relay settings are not valid, so uploads are unavailable: {{ configError }}
-      </p>
-      <p v-else-if="connected && relayPending" class="wru-gated" role="status">Checking the upload relay…</p>
-      <p v-else-if="connected && noRelayAvailable" class="wru-gated" role="status">
-        An access pass is required to upload through this relay — purchase one above to continue.
-      </p>
-
-      <fieldset v-if="availableRelays.length > 1" class="wru-relays">
-        <legend>Upload relay</legend>
-        <label v-for="option in availableRelays" :key="option.host" class="wru-relay-opt">
-          <input
-            type="radio"
-            :value="option.host"
-            :checked="selectedRelayHost === option.host"
-            @change="(e) => (selectedRelayHost = (e.target as HTMLInputElement).value)"
-          />
-          <span>{{ option.label }}</span>
-        </label>
-      </fieldset>
-
-      <div class="wru-duration">
-        <label for="wru-epochs">Storage duration</label>
-        <div class="wru-duration__controls">
-          <input
-            id="wru-epochs"
-            v-model.number="uploadEpochs"
-            type="number"
-            min="1"
-            :max="maxUploadEpochs"
-            aria-describedby="wru-duration-help"
-          />
-          <span class="wru-duration__unit">epochs</span>
-          <button type="button" class="wru-preset" :disabled="uploadEpochs >= maxUploadEpochs" @click="uploadEpochs = maxUploadEpochs">Max</button>
-          <button
-            type="button"
-            class="wru-preset"
-            @click="uploadEpochs = Math.min(10, maxUploadEpochs)"
-          >
-            Short
-          </button>
-        </div>
-        <p id="wru-duration-help" class="wru-duration__help">
-          Max {{ maxUploadEpochs }} epochs per upload; extend later from "My Blobs".
-        </p>
-      </div>
-
-      <div class="wru-permanence">
-        <label>
-          <input v-model="permanent" type="checkbox" aria-describedby="wru-permanence-help" />
-          Permanent
-        </label>
-        <p id="wru-permanence-help" class="wru-duration__help">
-          A permanent blob cannot be deleted by anyone — including you — before it expires. Untick to
-          store it as deletable, so you can remove it early and reclaim the unused storage.
-        </p>
-      </div>
+      <UploadRelayStatus
+        v-model:host="selectedRelayHost"
+        :config-error="configError"
+        :connected="connected"
+        :pending="relayPending"
+        :relays="availableRelays"
+        choose
+      />
+      <UploadStorageOptions v-model:epochs="uploadEpochs" v-model:permanent="permanent" :max-epochs="maxUploadEpochs" />
 
       <!-- The relay upload failed after the blob was registered and paid for. Retrying uses that
            registration (no second storage fee, tip or registration gas). -->
-      <div v-if="pendingUpload" class="wru-certify" role="status">
-        <p class="wru-certify__msg">
-          Your blob is registered and paid for, but the upload to the relay did not complete. Retry
-          the upload on the same registration — no second payment.
-        </p>
-        <button type="button" :disabled="retryingUpload" @click="runPendingUpload">
-          <span v-if="retryingUpload" class="wru-spinner" aria-hidden="true"></span>
-          {{ retryingUpload ? 'Retrying…' : 'Retry upload' }}
-        </button>
-      </div>
+      <UploadRecovery v-if="pendingUpload" kind="upload" :busy="retryingUpload" @retry="runPendingUpload" />
+      <UiNotice v-if="error" type="error" :message="error" />
 
-      <p v-if="error" class="wru-error" role="alert">{{ error }}</p>
-
-      <div class="wru-nav">
-        <button type="button" class="wru-back" @click="uploadStep = 0">Back</button>
-        <button
-          type="button"
-          :disabled="noRelayAvailable"
-          @click="uploadStep = 2"
-        >
-          Next
-        </button>
-      </div>
+      <p class="wru-nav">
+        <UiButton variant="ghost" @click="uploadStep = 0">Back</UiButton>
+        <UiButton :disabled="noRelayAvailable" @click="uploadStep = 2">Next</UiButton>
+      </p>
     </template>
 
-    <!-- Step 2: Review + upload -->
+    <!-- Review and upload -->
     <template v-else-if="uploadStep === 2">
-      <p class="wru-filename">
+      <p class="wru-file">
         <strong>{{ fileName }}</strong>
-        <button type="button" class="wru-change-file" @click="uploadStep = 1">Change options</button>
+        <UiButton variant="link" size="sm" @click="uploadStep = 1">Change options</UiButton>
       </p>
 
-      <p v-if="costLine" class="wru-cost">{{ costLine }}</p>
+      <UploadHint v-if="costLine" class="wru-cost">{{ costLine }}</UploadHint>
+      <UploadHint>
+        Requires <strong>WAL</strong> (storage) and <strong>SUI</strong> (gas + relay fee) in your wallet; {{ approvalsHint }}.
+      </UploadHint>
 
-      <p id="wru-help" class="wru-hint">
-        Requires <strong>WAL</strong> (storage) and <strong>SUI</strong> (gas + relay fee) in your
-        wallet; {{ approvalsHint }}.
-      </p>
-
-      <p v-if="configError" class="wru-error" role="alert">
-        The relay settings are not valid, so uploads are unavailable: {{ configError }}
-      </p>
-      <p v-else-if="connected && relayPending" class="wru-gated" role="status">Checking the upload relay…</p>
-      <p v-else-if="connected && noRelayAvailable" class="wru-gated" role="status">
-        An access pass is required to upload through this relay — purchase one above to continue.
-      </p>
+      <UploadRelayStatus
+        v-model:host="selectedRelayHost"
+        :config-error="configError"
+        :connected="connected"
+        :pending="relayPending"
+        :relays="availableRelays"
+      />
 
       <!-- Upload landed but certification didn't (e.g. the wallet prompt was declined). The blob is
            already stored and paid for; offer a one-click certify rather than forcing a full re-upload. -->
-      <div v-if="pendingCertify" class="wru-certify" role="status">
-        <p class="wru-certify__msg">
-          Your blob was uploaded and paid for but not yet <strong>certified</strong> — certify it to
-          finish (one wallet approval, gas only; no re-upload).
-        </p>
-        <button type="button" :disabled="certifying" @click="runPendingCertify">
-          <span v-if="certifying" class="wru-spinner" aria-hidden="true"></span>
-          {{ certifying ? 'Certifying…' : 'Certify blob' }}
-        </button>
-      </div>
+      <UploadRecovery v-if="pendingCertify" kind="certify" :busy="certifying" @retry="runPendingCertify" />
+      <UiNotice v-if="error" type="error" :message="error" />
 
-      <p v-if="error" class="wru-error" role="alert">{{ error }}</p>
-
-      <div class="wru-nav">
-        <button type="button" class="wru-back" @click="uploadStep = 1">Back</button>
-        <button
-          ref="uploadBtnRef"
-          type="button"
-          :disabled="uploading || !connected || !fileName || noRelayAvailable"
-          @click="upload()"
-        >
-          <span v-if="uploading" class="wru-spinner" aria-hidden="true"></span>
+      <p class="wru-nav">
+        <UiButton variant="ghost" @click="uploadStep = 1">Back</UiButton>
+        <UiButton ref="uploadBtn" :busy="uploading" :disabled="!connected || !fileName || noRelayAvailable" @click="upload()">
           Upload to Walrus
-        </button>
-      </div>
+        </UiButton>
+      </p>
     </template>
 
-    <!-- Blocking progress while uploading: a non-dismissible native modal (the page behind is
-         inert and focus stays in the dialog). -->
-    <UiDialog :open="uploading" title="Uploading to Walrus…" :dismissible="false" width="min(24rem, 90vw)" class="wru-modal">
-      <!-- Stepped progress: a single horizontal line of nodes the upload walks through (the
-           pulsing active node is the working indicator). Shown when the app reports structured
-           progress; legacy string callers get just the status line below. -->
-      <ol
-        v-if="activeStep"
-        class="wru-steps"
-        :aria-label="`Step ${activeIndex + 1} of ${steps.length}`"
-      >
-        <li
-          v-for="(s, i) in steps"
-          :key="s.key"
-          class="wru-step"
-          :class="`is-${stepState(i)}`"
-          :aria-current="stepState(i) === 'active' ? 'step' : undefined"
-        >
-          <span class="wru-step__node" aria-hidden="true">
-            <span v-if="stepState(i) === 'done'" class="wru-step__check">✓</span>
-            <span v-else-if="stepState(i) === 'active'" class="wru-step__pulse"></span>
-          </span>
-          <span class="wru-step__label">{{ s.label }}</span>
-        </li>
-      </ol>
-
-      <p class="wru-modal__status" aria-live="polite">{{ status || 'Preparing…' }}</p>
-      <p class="wru-modal__hint">Keep this tab open and approve the wallet prompts.</p>
-    </UiDialog>
-
-    <!-- You already own this blob: offer to manage the existing copy instead of paying for a
-         duplicate. Copy + primary action adapt to whether it's certified (Extend) or pending (Certify). -->
-    <UiDialog
-      v-if="duplicate"
-      open
-      title="You already have this blob"
-      width="min(24rem, 90vw)"
-      class="wru-modal"
-      @close="duplicate = null"
-    >
-      <p class="wru-modal__status">
-        <template v-if="duplicate.kind === 'certified'">
-          It's already stored and available until epoch {{ duplicate.endEpoch }}. Uploading again
-          creates a duplicate and charges the relay fee again — extend its lifetime instead.
-        </template>
-        <template v-else>
-          You already uploaded this but haven't certified it yet. Finish certifying it instead of
-          paying to upload again.
-        </template>
-      </p>
-      <template #actions>
-        <button type="button" class="wru-dup__primary" @click="manageExisting">
-          {{ duplicate.kind === 'certified' ? 'Extend it' : 'Certify it' }}
-        </button>
-        <button type="button" @click="uploadAnyway">Upload a new copy</button>
-        <button type="button" class="wru-dup__cancel" @click="duplicate = null">Cancel</button>
-      </template>
-    </UiDialog>
+    <UploadProgressDialog :open="uploading" :step="activeStep" :gated="sawAccessStep" :status="status" />
+    <UploadDuplicateDialog v-if="duplicate" :existing="duplicate" @manage="manageExisting" @upload-anyway="uploadAnyway" @cancel="duplicate = null" />
   </div>
 </template>
 
 <style scoped>
-.wru-relays {
-  margin: 0.75rem 0;
+.wru-upload {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-xs);
 }
-.wru-relay-opt {
+.wru-file {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.wru-cost,
-.wru-hint {
-  margin: 0.5rem 0;
-  font-size: 0.9rem;
-  color: var(--muted, #6e635c);
-}
-.wru-error {
-  margin: 0.5rem 0;
-  color: var(--danger, #b3261e);
-}
-.wru-certify {
-  margin: 0.75rem 0;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid var(--accent, #b84527);
-  border-radius: var(--radius, 10px);
-  background: color-mix(in srgb, var(--accent, #b84527) 8%, transparent);
-}
-.wru-certify__msg {
-  margin: 0 0 0.6rem;
-  font-size: 0.9rem;
-}
-.wru-duration {
-  margin: 0.75rem 0;
-}
-.wru-duration > label {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin-bottom: 0.35rem;
-}
-.wru-duration__controls {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
   flex-wrap: wrap;
-}
-.wru-duration__controls input {
-  width: 5rem;
-}
-.wru-duration__unit {
-  font-size: 0.85rem;
-  color: var(--muted, #6e635c);
-}
-.wru-preset {
-  font-size: 0.8rem;
-  padding: 0.15rem 0.5rem;
-}
-.wru-duration__help {
-  margin: 0.35rem 0 0;
-  font-size: 0.8rem;
-  color: var(--muted, #6e635c);
-}
-/* Centre the duplicate-dialog actions (UiDialog's footer right-aligns by default). */
-.wru-modal :deep(.mw-dialog__actions) {
-  justify-content: center;
-}
-/* The dialog buttons set their own surface and text colour, so their contrast does not depend on the
-   browser's button colours (a dark colour scheme paints a native button mid-grey). */
-.wru-modal :deep(.mw-dialog__actions) button {
-  background: transparent;
-  color: var(--text, #201b19);
-  border: 1px solid var(--border, #ded6cf);
-  border-radius: var(--radius, 10px);
-  padding: 0.35rem 0.8rem;
-  font: inherit;
-  cursor: pointer;
-}
-.wru-modal :deep(.mw-dialog__actions) button.wru-dup__primary {
-  border-color: var(--accent, #b84527);
-  color: var(--accent, #b84527);
-}
-.wru-modal :deep(.mw-dialog__actions) button.wru-dup__cancel {
-  color: var(--muted, #6e635c);
-}
-.wru-gated {
-  margin: 0.5rem 0;
-  font-size: 0.9rem;
-  color: var(--accent, #b84527);
-}
-.wru-spinner {
-  display: inline-block;
-  width: 0.8em;
-  height: 0.8em;
-  margin-right: 0.4em;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: wru-spin 0.7s linear infinite;
-  vertical-align: -0.1em;
-}
-@keyframes wru-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.wru-filename {
-  display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin: 0 0 0.75rem;
-  font-size: 0.9rem;
-  flex-wrap: wrap;
-}
-.wru-change-file {
-  background: transparent;
-  border: 0;
-  color: var(--accent, #b84527);
-  cursor: pointer;
-  padding: 0;
-  font: inherit;
-  font-size: 0.8rem;
+  gap: var(--space-xs);
+  margin: 0;
 }
 .wru-nav {
   display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
-  align-items: center;
-  margin-top: 0.75rem;
   flex-wrap: wrap;
-}
-.wru-back {
-  background: transparent;
-  border: 0;
-  color: var(--accent, #b84527);
-  cursor: pointer;
-  padding: 0;
-  font: inherit;
-}
-
-/* ── Progress modal ─────────────────────────────────────────────────────────── */
-/* Progress + duplicate dialogs (UiDialog provides the box, backdrop and heading). */
-.wru-modal {
-  text-align: center;
-}
-.wru-modal__status {
-  margin: 0;
-  font-size: 0.95rem;
-  color: var(--text, #201b19);
-  min-height: 1.4em;
-}
-.wru-modal__hint {
-  margin: 0.6rem 0 0;
-  font-size: 0.8rem;
-  color: var(--muted, #6e635c);
-}
-
-/* ── Stepped progress ───────────────────────────────────────────────────────── */
-.wru-steps {
-  display: flex;
-  list-style: none;
-  margin: 1.1rem 0 0.9rem;
-  padding: 0;
-}
-.wru-step {
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
-  position: relative;
-  min-width: 0;
-}
-/* Connecting line: the segment entering each node (from the previous one). Accent once reached. */
-.wru-step:not(:first-child)::before {
-  content: '';
-  position: absolute;
-  top: 0.6rem; /* vertical centre of the 1.2rem node */
-  right: 50%;
-  left: -50%;
-  height: 2px;
-  background: var(--border, #ded6cf);
-  z-index: 0;
-}
-.wru-step.is-done::before,
-.wru-step.is-active::before {
-  background: var(--accent, #b84527);
-}
-.wru-step__node {
-  position: relative;
-  z-index: 1;
-  width: 1.2rem;
-  height: 1.2rem;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface, #fff);
-  border: 2px solid var(--border, #ded6cf);
-  color: var(--accent-contrast, #fff);
-  font-size: 0.7rem;
-  line-height: 1;
-  transition: border-color 0.2s, background-color 0.2s;
-}
-.wru-step.is-done .wru-step__node {
-  background: var(--accent, #b84527);
-  border-color: var(--accent, #b84527);
-}
-.wru-step.is-active .wru-step__node {
-  border-color: var(--accent, #b84527);
-}
-.wru-step__pulse {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: var(--accent, #b84527);
-  animation: wru-pulse 1s ease-in-out infinite;
-}
-.wru-step__label {
-  font-size: 0.72rem;
-  line-height: 1.1;
-  text-align: center;
-  color: var(--muted, #6e635c);
-  white-space: nowrap;
-}
-.wru-step.is-done .wru-step__label,
-.wru-step.is-active .wru-step__label {
-  color: var(--text, #201b19);
-}
-.wru-step.is-active .wru-step__label {
-  font-weight: 600;
-}
-@keyframes wru-pulse {
-  0%,
-  100% {
-    transform: scale(0.7);
-    opacity: 0.6;
-  }
-  50% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .wru-modal__spinner,
-  .wru-spinner {
-    animation-duration: 1.6s;
-  }
-  .wru-step__pulse {
-    animation: none;
-  }
-}
-
-.wru-permanence {
-  margin: 0.75rem 0;
-}
-.wru-permanence label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-weight: 600;
+  justify-content: flex-end;
+  gap: var(--space-2xs);
+  margin: var(--space-2xs) 0 0;
 }
 </style>

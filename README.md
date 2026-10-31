@@ -35,6 +35,8 @@ import '@meddleware/design-tokens/tokens.css' // defines the CSS vars used here
 | `AccessGateCta` | component | "Purchase access" prompt when gated and the wallet lacks the NFT. Shows the exact payment, recipients, network and pass read from the chain (`useAccessGate().terms`); the button stays disabled until they are read. |
 | `probeRelay` / `parseTipFromConfig` | fn | Pure relay `/v1/tip-config` helpers (unit-testable, no deps). |
 | `walrusBlobUrl` / `WALRUS_AGGREGATOR_HOSTS` | fn/const | Raw-blob aggregator URL builder. |
+| `walruscanBlobUrl` / `PUBLIC_WALRUS_RELAY_HOSTS` | fn/const | The Walruscan explorer URL for a blob; the public Mysten upload relays (the fallback host per network). |
+| `useGatedUpload(gate)` | composable | `accessFor(...)` returns the relay access (`createGatedAccess`) for an upload when the wallet holds a pass and the relay is not the public one, else `undefined`. Call it from `performUpload`. |
 | `MAX_SINGLE_RESERVATION_EPOCHS` | const | `53` — Walrus `max_epochs_ahead`. |
 
 ## Design notes

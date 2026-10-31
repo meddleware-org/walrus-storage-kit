@@ -1,39 +1,5 @@
-import { suiBoundary } from '@meddleware/eslint-config'
-import { globalIgnores } from 'eslint/config'
-import { defineConfigWithVueTs, vueTsConfigs } from '@vue/eslint-config-typescript'
-import pluginVue from 'eslint-plugin-vue'
-import pluginA11y from 'eslint-plugin-vuejs-accessibility'
+import { vueApp } from '@meddleware/frontend-config/eslint'
 
-// Flat ESLint config for the component library. Layers vue-a11y (WAI-ARIA
-// linting for templates) on top of the standard Vue + TypeScript recommended
-// rules, so accessibility regressions are caught in CI.
-export default defineConfigWithVueTs(
-  {
-    name: 'walrus-storage-kit/files-to-lint',
-    files: ['**/*.{vue,ts,mts,tsx}'],
-  },
-
-  globalIgnores(['**/dist/**', '**/gallery-dist/**', '**/test-results/**', '**/playwright-report/**', '**/coverage/**', '**/*.d.ts']),
-
-  ...pluginVue.configs['flat/essential'],
-  ...pluginA11y.configs['flat/recommended'],
-  vueTsConfigs.recommended,
-
-  {
-    name: 'walrus-storage-kit/a11y-overrides',
-    rules: {
-      // <ol role="list"> is an intentional workaround: Safari/VoiceOver drops
-      // list semantics when list-style is removed, so the explicit role stays.
-      'vuejs-accessibility/no-redundant-roles': 'off',
-      // Accept both valid label-association patterns: a label wrapping its
-      // control (nesting) or a label[for] pointing at a control[id]. Both are
-      // used by the form primitives (UiSegmentedControl nests; UiFormField uses for/id).
-      'vuejs-accessibility/label-has-for': [
-        'error',
-        { required: { some: ['nesting', 'id'] } },
-      ],
-    },
-  },
-
-  ...suiBoundary(),
-)
+// The fleet's Vue + TypeScript + accessibility + browser-compat config, plus the chain boundary: this library holds no on-chain logic
+// (it takes it from the domain clients) and must not import the Walrus wasm client.
+export default vueApp({ name: 'walrus-storage-kit', sui: true })

@@ -55,10 +55,25 @@ They change only when `access-gate-sui` publishes a new deployment record. Bump
   subpath, never the walrus-storage-client root, which pulls the wasm client.
 - **No build step.** Ships TypeScript source directly (resolved by the consuming app's
   bundler via `"exports": { ".": { "default": "./src/index.ts" } }`).
-- **Modals use `@meddleware/ui`'s `UiDialog`.** `WalrusUpload`'s blocking progress dialog is
+- **Built from `@meddleware/ui` and the tokens, nothing else.** No local card, badge, button, stepper, spinner or notice CSS and no
+  colour, size or radius literal (`tests/upload-parts.test.ts` fails on a hex colour or a hard-coded `id` in any SFC; stylelint
+  enforces the tokens). `TipConfigBadge` is a `UiBadge` (tone from the relay's state; its symbol is `aria-hidden`), `AccessGateCta` a
+  `UiCard`, the buttons `UiButton` (`busy` for work in flight), notices `UiNotice`, status text an always-mounted `UiLiveStatus`, the
+  relay choice a `UiSegmentedControl`, the fields `UiTextField`/`UiCheckField`. Every id comes from `useId()`: two widgets in one page
+  must not collide. `@meddleware/ui` and `@meddleware/design-tokens` are **peer** dependencies (the consuming app provides them and
+  imports `tokens.css`, `seasons.css` and `@meddleware/ui/reset.css` once); the gallery does the same.
+- **Modals use `@meddleware/ui`'s `UiDialog`.** The blocking progress dialog (`upload/UploadProgress.vue`) is
   `UiDialog :dismissible="false"` (native modal: page inert, focus kept inside — no hand-rolled
-  focus trap); the duplicate-blob prompt is a dismissible `UiDialog`. Do not reintroduce
+  focus trap); the duplicate-blob prompt (`upload/UploadDuplicateDialog.vue`) is a dismissible `UiDialog`. Do not reintroduce
   `div role="dialog"` overlays.
+- **`WalrusUpload.vue` owns the state; `components/upload/*` are the parts.** `UploadFileStep`, `UploadStorageOptions` (duration +
+  permanence), `UploadRelayStatus` (relay notes + choice), `UploadRecovery` (retry the upload / certify, no second payment),
+  `UploadProgress`, `UploadDuplicateDialog`, `UploadHint`. A part takes props and `v-model`s and emits; it holds no upload logic.
+  A session change (`sessionKey`, hosts, disconnect) invalidates a `createOperationScope` from web-utils, so an outcome that arrives
+  afterwards is dropped.
+- **`useGatedUpload(gate)` decides relay access for an upload.** `accessFor({ relayHost, publicHost, address, network, executor,
+  sign, onStatus })` returns the `createGatedAccess` for a held pass, or `undefined` when none is needed (no gate, no pass, or the
+  public relay: never spend a use there). Apps call it from `performUpload`; they do not rebuild the ports themselves.
 - **Composables over components.** `useWalrusRelay` and `useAccessGate` are the primary
   integration surface. The Vue components (`WalrusUpload`, `TipConfigBadge`, `AccessGateCta`)
   wire them together for common use cases; composables can be used directly for custom UIs.
@@ -77,8 +92,10 @@ Operator relay URLs are NOT hardcoded here. They are passed by the consuming app
 
 ## `lib/relay.ts` — pure module, no Vue
 
-`parseTipFromConfig`, `probeRelay`, `walrusBlobUrl`, `WALRUS_AGGREGATOR_HOSTS`, and
-`MAX_SINGLE_RESERVATION_EPOCHS` live in `src/lib/relay.ts`. This module has no Vue or
+`parseTipFromConfig`, `probeRelay`, `walrusBlobUrl`, `WALRUS_AGGREGATOR_HOSTS`, `PUBLIC_WALRUS_RELAY_HOSTS` (the one copy of the
+public relay addresses; the client's own constant lives in its root, which this package may not import) and
+`MAX_SINGLE_RESERVATION_EPOCHS` live in `src/lib/relay.ts`. `formatCoinAmount`, `formatCoinExact`, `walruscanBlobUrl` and the body
+reader behind `readBoundedJson` come from `@meddleware/web-utils` (re-exported, so this package's API is unchanged). This module has no Vue or
 `@mysten/walrus` import — it's safe to consume from non-Vue contexts (e.g. the
 token-issuance app's non-reactive utils).
 
@@ -109,6 +126,13 @@ implementation path. Until then, auto-selection is intentional.
 Separately: preventing a user from holding more than one NFT per gate should be enforced
 on-chain (a `max_per_address` field on the `Gate` struct) rather than in this UI layer, since
 the gateway verifies the consume event, not the purchase count.
+
+## Testing
+
+Unit tests render the real `@meddleware/ui` (no stubs): Vitest processes the UI packages through Vite (`test.server.deps.inline:
+inlineMeddleware` from `@meddleware/frontend-config/vitest`) and a test that opens a dialog calls `installDialogShim()` first.
+`npm run test:e2e` builds the gallery and runs axe (WCAG 2.2 AA **and** AAA) over every state in 10 theme × season looks;
+`E2E_BROWSERS=all` adds Firefox, WebKit and two mobile profiles. `npm run shots` writes the screenshot matrix (`SHOTS_OUT`) for looking.
 
 ## What NOT to do
 

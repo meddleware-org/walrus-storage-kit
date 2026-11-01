@@ -14,11 +14,12 @@ upload relay.
 **Project type:** UI library (Vue 3 SFCs + composables; ships TypeScript/SFC source, no build step)
 **Template:**
 
-- AUDIT_TEMPLATE.md (2026-10-08)
-- AUDIT_TEMPLATE_VUE.md (2026-10-08)
+- AUDIT_TEMPLATE.md (2026-11-01)
+- AUDIT_TEMPLATE_VUE.md (2026-11-01)
 - AUDIT_TEMPLATE_WALRUS.md (2026-09-30)
 - AUDIT_TEMPLATE_SUI_CLIENT.md (2026-10-08)
-- AUDIT_TEMPLATE_TS.md (2026-10-08)
+- AUDIT_TEMPLATE_TS.md (2026-11-01)
+- AUDIT_TEMPLATE_A11Y.md (2026-11-01), gallery sweeps
 
 Not triggered: AUTH (no credentials; access proofs live in walrus-storage-client and access-gate-gateway-client), SEAL,
 OPS (the integration workflow reuses walrus-storage-client's localnet harness, audited there; it publishes
@@ -52,7 +53,7 @@ RUST, SITE, PLATFORM.
   consumed, `nft-gate:access:v2` proof, upload through the Worker). The proof is built by
   walrus-storage-client and access-gate-gateway-client, not by this library.
 
-**Review date:** 2026-09-18 (first pass, corpus) · **re-verified 2026-10-03** · **re-verified 2026-10-09** · **fix wave 2026-10-10** · **release status 2026-10-18**; 0.1.36 re-verified 2026-10-31 (Token-only styling, ui components, gated upload composable)
+**Review date:** 2026-09-18 (first pass, corpus) · **re-verified 2026-10-03** · **re-verified 2026-10-09** · **fix wave 2026-10-10** · **release status 2026-10-18**; 0.1.36 released 2026-10-31 (Token-only styling, ui components, gated upload composable); frontend-wave delta review 2026-11-01 (real review of the 2026-10-19 → 2026-11-01 changes; see the delta section)
 **Reviewer:** Internal review
 **Severity ceiling:** Medium.
 
@@ -198,6 +199,8 @@ lines of source), with 161 tests in 8 files at 0.1.31.
 - Maintainer and mainnet items: the `access_gate` mainnet deployment, the external review.
 
 ---
+
+**2026-11-01 update.** 0.1.36 split the upload widget into parts, added `useGatedUpload` and moved the amount and bounded-read helpers to web-utils. The review found one resolved display defect (F24, float formatting) and confirmed the access, permanence and relay-response properties (F25–F27); no source change is needed — only the dependency alignment release that accompanies the wave.
 
 ## Threat model / trust boundaries
 
@@ -929,6 +932,38 @@ without the economics, or adjust the rule if the comment is acceptable. The main
 
 ---
 
+### Frontend wave delta review (2026-11-01) — 0.1.33 to 0.1.36 reviewed
+
+Scope: the changes since the 2026-10-19 review: the access proof v3 and `access-gate-client` 0.0.12 (0.1.35), the rename (0.1.34), and the 0.1.36 rebuild — `WalrusUpload.vue` split into seven `upload/*` parts (about 640 lines removed), the new `useGatedUpload` composable, token-only styling on `@meddleware/ui` components, `MAX_TIP_MIST` lowered to 0.005 SUI (0.1.32), and the amount/bounded-read helpers replaced by `@meddleware/web-utils`. Read: `src/lib/relay.ts` (diff), `src/composables/useGatedUpload.ts`, `useAccessGate.ts`, `upload/UploadStorageOptions.vue`, `WalrusUpload.vue`, the new tests, the workflows. Ran: `npm ci`, the audit gate (0 high/critical, allowlist empty), `vue-tsc`, lint (stylelint, eslint, html-validate), `vitest` (10 files, 192 tests), `npm pack --dry-run` (23 files, 105 kB: `src/`, `CHANGELOG.md`, `SECURITY.md`; no tests, gallery or e2e), and the gallery e2e on Chromium, Firefox, WebKit and the two mobile projects with the CI font and the locally packed `ui` 0.1.38, `design-tokens` 0.1.13, `web-utils` 0.0.2 and `wallet-adapter` 0.0.21: **350 passed**.
+
+### F24 — `formatCoinAmount` formatted through a floating-point number
+**Severity:** Low   **Disposition:** RESOLVED
+**Where:** `src/lib/relay.ts` (before 0.1.36): `Number(base) / 1e9` with `toFixed`.
+**Issue:** the display helper converted a bigint to a double. Above 2^53 base units the digits drift, and `toFixed` rounding of ties depends on the binary value, so the same tip could print differently on two machines. The amount a person approves is `formatCoinExact` (digit-exact), but the rounded figure was shown beside it.
+**Impact:** a displayed estimate off by a few base units for very large values; none for real relay tips (about 10⁵–10⁷ MIST).
+**Remediation / evidence:** both helpers moved to `@meddleware/web-utils` (bigint digits, half away from zero, tiny non-zero values shown in full) and are re-exported unchanged; the web-utils tests cover values beyond 2^53 and the real 10 000 MIST tip. The kit's tests (`tests/relay.test.ts`) pass against them. 0.1.36.
+
+### F25 — Positive: the gated upload decides access in one place, and a retry never burns a use
+**Severity:** Positive
+**Where:** `src/composables/useGatedUpload.ts`, `tests/useGatedUpload.test.ts` (101 lines).
+**Evidence:** `accessFor` returns no access when no gate is configured, the wallet holds no pass, or the upload goes to the public fallback relay (compared by origin, so a gated host with the same path is not confused with it); for a single-use pass the on-chain consume is persisted (`consumeStorageKey(network, gateId, address)`) before the upload and reused on a retry, and a new use is spent only after the gateway reports the stored one redeemed; the access proof is bound to the relay's origin, the gate id (normalised) and the network, so a proof made here works nowhere else. The kit still never decides the price or the recipients: they are read from the chain and shown before the wallet prompt (D46).
+
+### F26 — Positive: the permanence and duration choices stay explicit after the split
+**Severity:** Positive
+**Where:** `upload/UploadStorageOptions.vue`, `tests/upload-parts.test.ts` (217 lines).
+**Evidence:** *Permanent* is a visible checkbox with the consequence stated ("cannot be deleted by anyone, including you, before it expires; untick it to store the blob as deletable"); the duration field is clamped to [1, `maxEpochs`] and the clamped value is put back in the field (a clamp equal to the shown value would otherwise leave stale text); presets are buttons. Tests cover the clamp, the presets and the toggle.
+
+### F27 — Positive: relay responses are untrusted and bounded
+**Severity:** Positive
+**Where:** `src/lib/relay.ts`.
+**Evidence:** the tip-config body is read with a 16 KiB cap (declared length first, then a streamed count) through the shared bounded reader; a tip above 0.005 SUI, negative or non-numeric is "unknown", never shown as a figure; aggregator and relay hosts are validated (https, or loopback http for a local testbed, no credentials). The fallback to the public relays is a constant table (`PUBLIC_WALRUS_RELAY_HOSTS`), not configuration.
+
+### Delta notes (A11Y lens)
+- Gate inventory: axe AA and AAA in every theme × season over the component gallery; forced colours and reduced motion through the shared helpers; five browser projects; 350 e2e tests. The upload widget's keyboard order and live regions (`role="status"`) are covered; the 44 px enhanced target size and screen-reader announcements are reviewed from screenshots, not automated.
+- Known exceptions: none disabled.
+- Supply chain: peers `@meddleware/ui` and `@meddleware/design-tokens` (`^0.1.x`, which take each patch), `@mysten/sui`, `@mysten/walrus`, `vue`; dependency `@meddleware/web-utils` (0.0.x: needs its range bumped with each release); dev `@meddleware/frontend-config`.
+- A dependency alignment release (0.1.37: `web-utils` ^0.0.2, `frontend-config` ^0.0.2, `wallet-adapter`/`ui` dev ranges) accompanies the wave; no source change.
+
 ## Section A — Invariant verification matrix
 
 | # | Invariant | Enforced at | Proven by | Status |
@@ -1362,6 +1397,7 @@ production tree is clean.
   - OQ3 now records its answer (decided 2026-10-10: `useAccessGate` enforces the published deployment through `assertPinnedGate`, 0.1.31); OQ5 now records that `integration.yml` uses `npm ci` (`.github/workflows/integration.yml:68`, 0.1.31). Dispositions and counts unchanged.
   - Not re-run: the unit suite (the 0.1.33 commit's own CI); the live paywall path.
 - 2026-10-22 (fix wave, CI only) — **F17 RESOLVED:** the last open item, the integration workflow's unpinned sibling checkouts, is closed. `integration.yml` pins `walrus-storage-client` to `75cd12a` and `access-gate-sui` to the `v0.0.7` commit (`bf23517`), with a comment on how to bump (see F17). Proof: the workflow dispatched on `main` passed (run 39784066851); actionlint clean. No package change, no version bump. Dispositions: F17 MITIGATED to RESOLVED; Section D unchanged (the tarball/CI box already cited F17 and now names the pins); open: OQ9 is decided (2026-10-18), the `access_gate` mainnet deployment and the external review are maintainer items.
+- 2026-11-01 — frontend-wave delta review of 0.1.33–0.1.36. Read the relay, gated-upload, storage-option and upload components and the new tests; ran the audit gate, type-check, lint, 192 tests, pack contents and the five-browser gallery e2e with the CI font (350 passed, with the local ui/tokens/web-utils/wallet-adapter packs). Recorded F24 (float amount formatting, resolved by web-utils in 0.1.36) and F25–F27 as Positive. Release-tool mark for 0.1.36 reworded to "released". `**Template:**` dates reconciled to the 2026-11-01 registry with no disposition change.
 
 ## Pre-save consistency checklist (this pass)
 

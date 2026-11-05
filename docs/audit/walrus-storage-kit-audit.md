@@ -28,6 +28,8 @@ RUST, SITE, PLATFORM.
 
 **Deployment status:**
 
+- **Current (2026-11-05): `0.1.37` is released to npm** (CI green, trusted publishing; dependency alignment on `@meddleware/ui` ^0.1.38, `design-tokens` ^0.1.13, `web-utils` ^0.0.2, `frontend-config` ^0.0.2); `walrus-storage-ui` 0.1.67 and `token-issuance-ui` 0.0.44 consume it and are deployed. The bullets below are the earlier history, kept as written.
+
 - **2026-10-22: npm `latest` is 0.1.33** (tag `v0.1.33` = `d8a1412`): 0.1.32 (tag `v0.1.32`, 2026-10-19) lowered `MAX_TIP_MIST` to 0.005 SUI (F1); 0.1.33 takes `@meddleware/walrus-storage-client` `^0.0.30` and `@meddleware/access-gate-client` `^0.0.10`
   (the stale-indexer fallback, and `access-gate-gateway-client` 0.0.18's rules including the gated flow's real challenge expiry; walrus-storage-client audit F26). No source change in this package for 0.1.33. Consumers: walrus-storage-ui 0.1.61 and token-issuance-ui 0.0.38 at `^0.1.33`.
 - Published (the 2026-10-18 release of the fix wave): npm `@meddleware/walrus-storage-kit` **0.1.31** (published 2026-10-18T09:00Z), from tag

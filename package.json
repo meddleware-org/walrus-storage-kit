@@ -48,7 +48,7 @@
     "vue": "^3.5.0"
   },
   "dependencies": {
-    "@meddleware/access-gate-client": "^0.0.12",
+    "@meddleware/access-gate-client": "^0.0.13",
     "@meddleware/walrus-storage-client": "^0.0.34",
     "@meddleware/web-utils": "^0.0.1"
   },

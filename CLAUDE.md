@@ -131,7 +131,7 @@ the gateway verifies the consume event, not the purchase count.
 
 Unit tests render the real `@meddleware/ui` (no stubs): Vitest processes the UI packages through Vite (`test.server.deps.inline:
 inlineMeddleware` from `@meddleware/frontend-config/vitest`) and a test that opens a dialog calls `installDialogShim()` first.
-`npm run test:e2e` builds the gallery and runs axe (WCAG 2.2 AA **and** AAA) over every state in 10 theme × season looks;
+`npm run test:e2e` builds the gallery and runs the shared sweep (`defineA11ySuite`: axe at WCAG 2.2 AA **and** AAA in 10 theme × season looks, reflow, 200% text, forced colours, reduced motion, keyboard) over every state in `e2e/a11y.spec.ts`; a state with nothing to operate is listed in `noKeyboard`;
 `E2E_BROWSERS=all` adds Firefox, WebKit and two mobile profiles. `npm run shots` writes the screenshot matrix (`SHOTS_OUT`) for looking.
 
 ## What NOT to do

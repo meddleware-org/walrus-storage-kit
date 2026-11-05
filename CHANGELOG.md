@@ -4,6 +4,12 @@ All notable changes to `@meddleware/walrus-relay` are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [Semantic Versioning](https://semver.org/). Before 0.2.0, breaking changes ship as patch releases.
 
+## [0.1.37] - 2026-11-05
+
+### Changed
+
+- Dependency alignment: `@meddleware/ui` ^0.1.38, `@meddleware/design-tokens` ^0.1.13, `@meddleware/web-utils` ^0.0.2 and `@meddleware/frontend-config` ^0.0.2; the gallery's accessibility gate is the shared sweep (`e2e/a11y.spec.ts`).
+
 ## [0.1.36] - 2026-10-31
 
 - Token-only styling, ui components, gated upload composable

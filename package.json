@@ -1,6 +1,6 @@
 {
   "name": "@meddleware/walrus-storage-kit",
-  "version": "0.1.36",
+  "version": "0.1.37",
   "description": "Shared Vue 3 UI for the Walrus upload relay: relay selection + tip estimation, NFT-gate access, and a blob-upload widget. Built on @meddleware/walrus-storage-client + @meddleware/access-gate-client.",
   "author": "Meddleware <dev@meddleware.co.uk>",
   "license": "0BSD",
@@ -41,8 +41,8 @@
     "shots": "SHOTS=1 playwright test"
   },
   "peerDependencies": {
-    "@meddleware/design-tokens": "^0.1.12",
-    "@meddleware/ui": "^0.1.36",
+    "@meddleware/design-tokens": "^0.1.13",
+    "@meddleware/ui": "^0.1.38",
     "@mysten/sui": "^2.36.0",
     "@mysten/walrus": "~1.2.35",
     "vue": "^3.5.0"
@@ -50,14 +50,14 @@
   "dependencies": {
     "@meddleware/access-gate-client": "^0.0.12",
     "@meddleware/walrus-storage-client": "^0.0.34",
-    "@meddleware/web-utils": "^0.0.1"
+    "@meddleware/web-utils": "^0.0.2"
   },
   "devDependencies": {
     "@axe-core/playwright": "~4.14.0",
-    "@meddleware/design-tokens": "^0.1.12",
+    "@meddleware/design-tokens": "^0.1.13",
     "@meddleware/eslint-config": "^0.0.4",
-    "@meddleware/frontend-config": "^0.0.1",
-    "@meddleware/ui": "^0.1.36",
+    "@meddleware/frontend-config": "^0.0.2",
+    "@meddleware/ui": "^0.1.38",
     "@mysten/sui": "^2.36.0",
     "@mysten/walrus": "~1.2.35",
     "@playwright/test": "~1.64.1",

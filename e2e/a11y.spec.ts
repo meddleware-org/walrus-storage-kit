@@ -36,7 +36,7 @@ defineA11ySuite(
     },
     'purchase prompt': async (page) => {
       await view('cta')(page)
-      await expect(page.getByText('Operator receives').first()).toBeVisible()
+      await expect(page.getByText('Gate owner receives').first()).toBeVisible()
       await expect(page.getByText('The pass price could not be read from the chain')).toBeVisible()
     },
     'upload: file step': upload('file'),

@@ -30,7 +30,7 @@ defineA11ySuite(
   {
     'relay badges': async (page) => {
       await view('badges')(page)
-      for (const text of ['Relay unreachable', 'tip unknown', 'tip above the limit', 'Relay address is not valid', 'Checking relay…']) {
+      for (const text of ['Relay unreachable', 'tip unknown', 'tip above the limit', 'Relay not available', 'Checking relay…']) {
         await expect(page.getByText(text)).toBeVisible()
       }
     },

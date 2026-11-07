@@ -141,7 +141,7 @@ export function useAccessGate(deps: {
       fetchGate(client, gate.gateId, originalId),
       fetchPlatformConfig(client, gate.platformConfigId, originalId),
     ])
-    if (!onChain) throw new Error(`${gate.gateId} is not an access gate of the published ${deps.network} deployment.`)
+    if (!onChain) throw new Error(`This access pass is not available on ${deps.network}.`)
     if (onChain.soulbound !== gate.soulbound) {
       throw new Error(
         `The configured pass kind (${gate.soulbound ? 'soulbound' : 'transferable'}) does not match the gate on the chain.`,

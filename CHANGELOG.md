@@ -4,6 +4,12 @@ All notable changes to `@meddleware/walrus-relay` are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [Semantic Versioning](https://semver.org/). Before 0.2.0, breaking changes ship as patch releases.
 
+## [0.1.39] - 2026-11-07
+
+### Changed
+
+- The relay choice is labelled "Meddleware relay (supports this app)", the invalid-relay badge says "Relay not available", and an unavailable access pass reads "This access pass is not available on <network>" instead of an internal sentence with a gate id.
+
 ## [0.1.38] - 2026-11-07
 
 ### Changed

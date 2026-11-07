@@ -95,7 +95,7 @@ describe('UploadStorageOptions', () => {
 
 describe('UploadRelayStatus', () => {
   const relays = [
-    { label: 'Operator relay', host: 'https://op.example', tip: null, tipStatus: 'unknown' as const, isPublic: false },
+    { label: 'Meddleware relay', host: 'https://op.example', tip: null, tipStatus: 'unknown' as const, isPublic: false },
     { label: 'Public relay', host: 'https://pub.example', tip: null, tipStatus: 'unknown' as const, isPublic: true },
   ]
   const base = { configError: null, connected: true, pending: false, relays, host: relays[0]!.host }

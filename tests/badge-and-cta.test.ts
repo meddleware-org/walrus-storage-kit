@@ -87,7 +87,7 @@ describe('TipConfigBadge (F9)', () => {
   it('shows a configuration error for an invalid host instead of staying on "Checking relay…"', async () => {
     relay('no_tip')
     const w = await badge('http://relay.example')
-    expect(words(w)).toBe('Relay address is not valid')
+    expect(words(w)).toBe('Relay not available')
     expect(w.attributes('data-state')).toBe('invalid')
   })
 

@@ -62,7 +62,7 @@ const state = computed(() => (loading.value ? 'loading' : invalid.value ? 'inval
 <template>
   <UiBadge :tone="tone" :symbol="loading ? false : undefined" :data-state="state" :data-tip="state === 'up' ? health.tipStatus : undefined">
     <template v-if="loading">Checking relay…</template>
-    <template v-else-if="invalid">Relay address is not valid</template>
+    <template v-else-if="invalid">Relay not available</template>
     <template v-else-if="accessible">Relay online · tip {{ tipLabel() }}</template>
     <template v-else>Relay unreachable</template>
   </UiBadge>

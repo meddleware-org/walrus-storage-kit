@@ -220,7 +220,7 @@ export function useWalrusRelay(
       if (!accessSatisfied.value) return []
       return [
         {
-          label: 'Operator relay (supports this app)',
+          label: 'Meddleware relay (supports this app)',
           host: operatorRelayHost.value,
           tip: operatorRelayTip.value,
           tipStatus: operatorTipStatus.value,

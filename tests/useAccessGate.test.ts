@@ -214,7 +214,7 @@ describe('useAccessGate purchase terms (F11)', () => {
     const { g, chain } = setup()
     chain.gateType = '0xdead::access_gate::Gate'
     expect(await g.loadTerms()).toBeNull()
-    expect(g.termsError.value).toMatch(/is not an access gate of the published testnet deployment/)
+    expect(g.termsError.value).toMatch(/access pass is not available on testnet/)
   })
 
   it('refuses a configured pass kind that disagrees with the gate', async () => {

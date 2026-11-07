@@ -132,7 +132,7 @@ describe('AccessGateCta (F11)', () => {
     const text = w.text()
     expect(text).toContain('testnet')
     expect(text).toContain('You pay0.010000001 SUI (plus network gas)')
-    expect(text).toContain(`Operator receives0.009980001 SUI ${terms.operator.address}`)
+    expect(text).toContain(`Gate owner receives0.009980001 SUI ${terms.operator.address}`)
     expect(text).toContain(`Platform fee0.00002 SUI ${terms.platform.address}`)
     expect(text).toContain('10 uses, soulbound (cannot be transferred)')
     expect(w.get('button').text()).toBe('Purchase access (0.010000001 SUI)')

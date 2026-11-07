@@ -1,5 +1,6 @@
 import { ref, computed, watch, toValue, getCurrentScope, onScopeDispose } from 'vue'
 import type { MaybeRefOrGetter, Ref } from 'vue'
+import { formatCoinAmount, mistToSui } from '@meddleware/web-utils'
 import {
   approxEncodedBytes,
   describeTip,
@@ -287,11 +288,11 @@ export function useWalrusRelay(
     // from the raw size (the exact figure is known only after encoding).
     const tipMist = estimateTipMist(cfg, approxEncodedBytes(fileSizeBytes.value))
     if (tipMist === null) return null // beyond the sanity ceiling — shown as unknown
-    const tipSui = Number(tipMist) / 1e9
+    // Exact digits from the base units, never through a float (the figure shown is the figure paid).
     return {
       mist: tipMist,
-      sui: tipSui.toFixed(6),
-      label: cfg.kind === 'none' ? 'No relay fee' : `Estimated relay fee: ~${tipSui.toFixed(4)} SUI`,
+      sui: mistToSui(tipMist),
+      label: cfg.kind === 'none' ? 'No relay fee' : `Estimated relay fee: ~${formatCoinAmount(tipMist, 'SUI')}`,
     }
   })
 

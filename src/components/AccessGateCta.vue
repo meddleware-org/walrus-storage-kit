@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// "Purchase access" call-to-action, shown when the operator relay is NFT-gated and the
+// "Purchase access" call-to-action, shown when the upload relay is NFT-gated and the
 // connected wallet does not (yet) hold the access NFT. Presentational + a single emit;
 // the parent owns the actual purchase (via `useAccessGate().purchase`). It shows the terms read
 // from the chain (`useAccessGate().terms`) before the wallet opens: the exact payment, who
@@ -41,7 +41,7 @@ function passLabel(t: PurchaseTerms): string {
 
 <template>
   <UiCard v-if="show" title="Access pass required" class="wru-cta">
-    <p>The operator relay is restricted to access-pass holders. Purchase a pass to upload through it.</p>
+    <p>This upload relay is restricted to access-pass holders. Purchase a pass to upload through it.</p>
 
     <UiNotice v-if="termsError" type="error" :message="`The pass price could not be read from the chain, so purchase is unavailable: ${termsError}`" />
     <UiLiveStatus label="Pass price" :message="!termsError && !terms ? 'Reading the pass price from the chain…' : ''" />
@@ -50,7 +50,7 @@ function passLabel(t: PurchaseTerms): string {
       <dd>{{ terms.network }}</dd>
       <dt>You pay</dt>
       <dd>{{ sui(terms.priceMist) }} (plus network gas)</dd>
-      <dt>Operator receives</dt>
+      <dt>Gate owner receives</dt>
       <dd>
         {{ sui(terms.operator.mist) }}
         <code class="wru-terms__addr">{{ terms.operator.address }}</code>

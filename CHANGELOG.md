@@ -4,6 +4,13 @@ All notable changes to `@meddleware/walrus-relay` are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [Semantic Versioning](https://semver.org/). Before 0.2.0, breaking changes ship as patch releases.
 
+## [0.1.38] - 2026-11-07
+
+### Changed
+
+- The access-pass prompt says "This upload relay" and "Gate owner receives" instead of "operator" (the audience is the user, not the person who runs the relay).
+- The estimated relay fee is written from the exact base units (`mistToSui`, `formatCoinAmount`), not through a floating-point number.
+
 ## [0.1.37] - 2026-11-05
 
 ### Changed

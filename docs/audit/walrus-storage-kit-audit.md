@@ -1147,7 +1147,7 @@ production tree is clean.
 - [x] untrusted-input parsing bounded: `Object.hasOwn` lookup, capped tip-config body (F22, TS-M2) — 0.1.31,
   commit `24d7c43`
 - [x] test files out of the tarball; lint and `npm ci` in the release path (F17) — 0.1.31, commit `24d7c43`; integration refs pinned to commits 2026-10-22 (commit pending, run 39784066851)
-- [ ] external review — maintainer item (`OPERATOR_TASKS.md` "Funding, grants and an external audit")
+- [ ] external review (ADR-0009 gate G4: not a launch gate; covered by redeploy and the audit pass) — maintainer item (`OPERATOR_TASKS.md` "Funding, grants and an external audit")
 
 ---
 

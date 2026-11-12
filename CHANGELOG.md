@@ -4,6 +4,12 @@ All notable changes to `@meddleware/walrus-relay` are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [Semantic Versioning](https://semver.org/). Before 0.2.0, breaking changes ship as patch releases.
 
+## [0.1.40] - 2026-11-12
+
+### Changed
+
+- Takes `@meddleware/web-utils` ^0.0.4 and `@meddleware/ui` ^0.1.42 (an app installs one copy of each).
+
 ## [0.1.39] - 2026-11-07
 
 ### Changed

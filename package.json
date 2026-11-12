@@ -50,17 +50,17 @@
   "dependencies": {
     "@meddleware/access-gate-client": "^0.0.13",
     "@meddleware/walrus-storage-client": "^0.0.34",
-    "@meddleware/web-utils": "^0.0.3"
+    "@meddleware/web-utils": "^0.0.4"
   },
   "devDependencies": {
     "@axe-core/playwright": "~4.14.0",
     "@meddleware/design-tokens": "^0.1.13",
     "@meddleware/eslint-config": "^0.0.4",
-    "@meddleware/frontend-config": "^0.0.7",
+    "@meddleware/frontend-config": "^0.0.8",
     "@meddleware/ui": "^0.1.40",
     "@mysten/sui": "^2.36.0",
     "@mysten/walrus": "~1.2.35",
-    "@playwright/test": "~1.64.1",
+    "@playwright/test": "~1.65.0",
     "@types/node": "~26.6.5",
     "@vitejs/plugin-vue": "^6.0.10",
     "@vue/eslint-config-typescript": "^14.9.0",

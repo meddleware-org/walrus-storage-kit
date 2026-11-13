@@ -18,9 +18,9 @@ const props = defineProps<{
   busy?: boolean
   /** The purchase terms read from the chain (`useAccessGate().terms`); `null` until they are read. */
   terms: PurchaseTerms | null
-  /** Why the terms could not be read (`useAccessGate().termsError`). */
+  /** Why the terms could not be read, in plain words for the person (`useAccessGate().termsError`, shown as given). */
   termsError?: string | null
-  /** Why the last purchase did not complete (`useAccessGate().purchaseError`). */
+  /** Why the last purchase did not complete, in plain words (`useAccessGate().purchaseError`, shown as given). */
   purchaseError?: string | null
 }>()
 
@@ -43,7 +43,7 @@ function passLabel(t: PurchaseTerms): string {
   <UiCard v-if="show" title="Access pass required" class="wru-cta">
     <p>This upload relay is restricted to access-pass holders. Purchase a pass to upload through it.</p>
 
-    <UiNotice v-if="termsError" type="error" :message="`The pass price could not be read from the chain, so purchase is unavailable: ${termsError}`" />
+    <UiNotice v-if="termsError" type="error" :message="termsError" />
     <UiLiveStatus label="Pass price" :message="!termsError && !terms ? 'Reading the pass price from the chain…' : ''" />
     <dl v-if="terms" class="wru-terms">
       <dt>Network</dt>

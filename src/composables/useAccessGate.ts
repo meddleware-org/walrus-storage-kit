@@ -17,6 +17,23 @@ import type { WalrusNetwork } from '../lib/relay.js'
 
 export type { AccessGateConfig, OwnedObjectsClient, SuiObjectClient }
 
+/** Shown when the pass terms cannot be read: plain and actionable, never the cause (that goes to the console). */
+export const TERMS_UNAVAILABLE_MESSAGE = 'This pass is not available right now. Try again in a moment, or contact the site.'
+/** Shown when a purchase fails for a reason the person cannot act on beyond trying again. */
+export const PURCHASE_FAILED_MESSAGE = 'The purchase did not go through. Check your wallet, then try again in a moment, or contact the site.'
+
+/**
+ * An error whose message is written for the person using the page, so it may be shown as it is. The
+ * technical cause, if any, is its `cause`; `purchase()` logs that to the console. Any other error is
+ * shown as `PURCHASE_FAILED_MESSAGE`.
+ */
+class GateUserError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = 'GateUserError'
+  }
+}
+
 /** The reads this composable makes: owned objects (passes) and single objects (the gate, the config). */
 export type GateClient = OwnedObjectsClient & SuiObjectClient
 
@@ -127,9 +144,12 @@ export function useAccessGate(deps: {
   /** The terms last read from the chain (what the purchase prompt shows); null until read. */
   const terms = ref<PurchaseTerms | null>(null)
   const termsLoading = ref(false)
-  /** Why the terms could not be read (the purchase stays blocked); null when they could. */
+  /**
+   * Why the terms could not be read (the purchase stays blocked), in plain words for the person; null
+   * when they could. The technical cause is logged with `console.error`.
+   */
   const termsError = ref<string | null>(null)
-  /** Why the last purchase did not complete; null otherwise. */
+  /** Why the last purchase did not complete, in plain words for the person; null otherwise. The cause is logged. */
   const purchaseError = ref<string | null>(null)
   let termsGeneration = 0
 
@@ -141,10 +161,10 @@ export function useAccessGate(deps: {
       fetchGate(client, gate.gateId, originalId),
       fetchPlatformConfig(client, gate.platformConfigId, originalId),
     ])
-    if (!onChain) throw new Error(`This access pass is not available on ${deps.network}.`)
+    if (!onChain) throw new Error(`Gate ${gate.gateId} was not found on ${deps.network}, or is not a gate of the published deployment.`)
     if (onChain.soulbound !== gate.soulbound) {
       throw new Error(
-        `The configured pass kind (${gate.soulbound ? 'soulbound' : 'transferable'}) does not match the gate on the chain.`,
+        `The configured pass kind (${gate.soulbound ? 'soulbound' : 'transferable'}) does not match gate ${gate.gateId} on the chain.`,
       )
     }
     const platformMist = gatePlatformShareMist(onChain, platform)
@@ -177,7 +197,8 @@ export function useAccessGate(deps: {
     } catch (e) {
       if (mine !== termsGeneration) return null
       terms.value = null
-      termsError.value = e instanceof Error ? e.message : String(e)
+      console.error('useAccessGate: could not read the pass terms from the chain', e)
+      termsError.value = TERMS_UNAVAILABLE_MESSAGE
       return null
     } finally {
       if (mine === termsGeneration) termsLoading.value = false
@@ -253,7 +274,7 @@ export function useAccessGate(deps: {
    * The wallet is asked to sign only for terms the user has seen: the terms are read from the chain
    * right before signing and must equal the `terms` last shown. If they differ (or none were shown
    * yet) the new terms are published in `terms` and this throws, so the user reviews them first.
-   * A paused gate is refused before any prompt. An `access_gate` abort is reported in words.
+   * A paused gate is refused before any prompt. An `access_gate` abort is reported in words. A failure is shown in plain words in `purchaseError` and logged with `console.error`.
    */
   async function purchase(executor: GateExecutor, address: string): Promise<void> {
     if (!gate) throw new Error('No access gate configured for this network.')
@@ -261,7 +282,9 @@ export function useAccessGate(deps: {
     try {
       await runPurchase(gate, executor, address)
     } catch (e) {
-      purchaseError.value = e instanceof Error ? e.message : String(e)
+      // The person gets words they can act on; the developer gets the original error, once.
+      console.error('useAccessGate: purchase failed', e instanceof GateUserError && e.cause !== undefined ? e.cause : e)
+      purchaseError.value = e instanceof GateUserError ? e.message : PURCHASE_FAILED_MESSAGE
       throw e
     }
   }
@@ -271,9 +294,9 @@ export function useAccessGate(deps: {
     if (pending && Date.now() - pending.at < PENDING_PURCHASE_MS) {
       await checkOwnership(address)
       if (hasAccess.value === true) return
-      throw new Error(
-        `Your purchase (transaction ${pending.digest}) went through but the pass is not visible yet. ` +
-          'Check again in a moment instead of buying another pass.',
+      throw new GateUserError(
+        'Your purchase went through but the pass is not visible yet. Check again in a moment instead of buying another pass.',
+        { cause: new Error(`Purchase transaction ${pending.digest} executed but its pass is not visible yet.`) },
       )
     }
     const shown = terms.value
@@ -282,15 +305,17 @@ export function useAccessGate(deps: {
     try {
       fresh = await readTerms()
     } catch (e) {
-      throw new Error(`Could not read the pass price from the chain: ${e instanceof Error ? e.message : String(e)}`, { cause: e })
+      throw new GateUserError(TERMS_UNAVAILABLE_MESSAGE, {
+        cause: new Error(`Could not read the pass price from the chain: ${e instanceof Error ? e.message : String(e)}`, { cause: e }),
+      })
     }
     if (mine === termsGeneration) {
       terms.value = fresh
       termsError.value = null
     }
-    if (fresh.paused) throw new Error('This gate is paused; access cannot be purchased right now.')
+    if (fresh.paused) throw new GateUserError('Purchases are paused right now. Try again later.')
     if (!shown || !sameTerms(shown, fresh)) {
-      throw new Error('The pass terms have changed. Review the payment and recipients shown, then confirm again.')
+      throw new GateUserError('The pass terms have changed. Review the payment and recipients shown, then confirm again.')
     }
     const tx = buildPurchaseTx(g, fresh.priceMist)
     let res: { digest?: string }
@@ -298,7 +323,7 @@ export function useAccessGate(deps: {
       res = await executor.signAndExecute(tx)
     } catch (e) {
       const message = abortMessage(e, originalId)
-      throw message ? new Error(message, { cause: e }) : e
+      throw message ? new GateUserError(message, { cause: e }) : e
     }
     // The executor throws for a failed transaction, so a digest here means the purchase executed.
     if (res.digest) pendingPurchase.value = { digest: res.digest, at: Date.now() }

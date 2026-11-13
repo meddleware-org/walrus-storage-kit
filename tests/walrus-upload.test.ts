@@ -589,14 +589,17 @@ describe('WalrusUpload: another account or network (F16)', () => {
 
 describe('WalrusUpload: relay settings', () => {
   it('shows a configuration error, not the pass prompt, when the hosts become invalid', async () => {
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
     const w = mountWidget(vi.fn<Perform>(async () => result()), { sessionKey: 'a' })
     await flushPromises()
     await w.setProps({ hosts: { operator: 'http://insecure.example.com', public: PUB } })
     await flushPromises()
     await chooseFile(w)
-    expect(w.get('[role="alert"]').text()).toMatch(/relay settings are not valid/)
+    expect(w.get('[role="alert"]').text()).toMatch(/Uploads are unavailable right now/)
     expect(w.text()).not.toContain('An access pass is required')
     expect(button(w, /^Next$/).attributes('disabled')).toBeDefined()
+    expect(w.get('[role="alert"]').text()).not.toMatch(/https|insecure\.example|operator relay host/)
+    quiet.mockRestore()
   })
 
   it('does not mount with an insecure host (a loud failure, not the free relay)', () => {

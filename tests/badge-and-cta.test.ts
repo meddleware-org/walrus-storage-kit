@@ -5,7 +5,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import TipConfigBadge from '../src/components/TipConfigBadge.vue'
 import AccessGateCta from '../src/components/AccessGateCta.vue'
 import { MAX_TIP_MIST } from '../src/lib/relay.js'
-import type { PurchaseTerms } from '../src/composables/useAccessGate'
+import { TERMS_UNAVAILABLE_MESSAGE, useAccessGate, type GateClient, type PurchaseTerms } from '../src/composables/useAccessGate'
+import { relayGateConfig } from '../src/constants'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -86,9 +87,26 @@ describe('TipConfigBadge (F9)', () => {
 
   it('shows a configuration error for an invalid host instead of staying on "Checking relay…"', async () => {
     relay('no_tip')
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
     const w = await badge('http://relay.example')
-    expect(words(w)).toBe('Relay not available')
+    expect(words(w)).toBe('Uploads are unavailable right now.')
     expect(w.attributes('data-state')).toBe('invalid')
+    quiet.mockRestore()
+  })
+
+  it('shows a person only plain words for a bad relay address, and logs the detail for developers', async () => {
+    relay('no_tip')
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const w = await badge('http://relay.example')
+    // Nothing technical reaches the page: no host, no scheme, no function name.
+    expect(words(w)).toBe('Uploads are unavailable right now.')
+    expect(words(w)).not.toMatch(/https|http|relay\.example|probeRelay|valid|operator/i)
+    // Once, with the original error object.
+    expect(log).toHaveBeenCalledTimes(1)
+    const raw = log.mock.calls[0]![1] as Error
+    expect(raw).toBeInstanceOf(Error)
+    expect(raw.message).toContain('host must use https://')
+    log.mockRestore()
   })
 
   it('probes again when the host changes, and ignores an older answer', async () => {
@@ -152,10 +170,43 @@ describe('AccessGateCta (F11)', () => {
     expect(w.emitted('purchase')).toBeUndefined()
   })
 
-  it('cannot purchase when the terms could not be read, and says why', () => {
-    const w = cta({ terms: null, termsError: 'rpc down' })
-    expect(w.get('[role="alert"]').text()).toContain('rpc down')
+  it('cannot purchase when the terms could not be read, and says what to do', () => {
+    const w = cta({ terms: null, termsError: TERMS_UNAVAILABLE_MESSAGE })
+    expect(w.get('[role="alert"]').text()).toBe(TERMS_UNAVAILABLE_MESSAGE)
     expect(w.get('button').attributes('disabled')).toBeDefined()
+  })
+
+  it('shows a person only plain words for a raw chain error, while console.error receives the raw one', async () => {
+    const raw = new Error('RPC 503: upstream connect error or disconnect/reset before headers')
+    const getObject = vi.fn(async () => {
+      throw raw
+    })
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const gateId = `0x${'a1'.repeat(32)}`
+    const g = useAccessGate({
+      network: 'testnet',
+      gate: relayGateConfig('testnet', { gateId, soulbound: true }),
+      getClient: () => ({ core: { getObject, listOwnedObjects: vi.fn() } }) as unknown as GateClient,
+    })
+    // Reading the terms fails, then so does a purchase.
+    await g.loadTerms()
+    const w = mount(AccessGateCta, {
+      props: { gateConfigured: true, hasAccess: false, terms: null, termsError: g.termsError.value, purchaseError: g.purchaseError.value },
+    })
+    expect(w.get('[role="alert"]').text()).toBe(TERMS_UNAVAILABLE_MESSAGE)
+    await expect(g.purchase({ signAndExecute: vi.fn(), waitForTransaction: vi.fn() }, '0xalice')).rejects.toThrow(TERMS_UNAVAILABLE_MESSAGE)
+    await w.setProps({ termsError: g.termsError.value, purchaseError: g.purchaseError.value })
+
+    const shown = w.text()
+    expect(shown).toContain(TERMS_UNAVAILABLE_MESSAGE)
+    expect(shown).not.toMatch(/RPC|503|upstream|Could not read|chain:|0x|operator/i)
+    expect(w.findAll('[role="alert"]').map((a) => a.text())).toEqual([TERMS_UNAVAILABLE_MESSAGE, TERMS_UNAVAILABLE_MESSAGE])
+    // The raw error reached the console, with the original object (from the terms read, and as the cause of the purchase failure).
+    expect(log.mock.calls.some((c) => c[1] === raw)).toBe(true)
+    const purchaseLog = log.mock.calls.at(-1)![1] as Error
+    expect(purchaseLog.message).toBe('Could not read the pass price from the chain: RPC 503: upstream connect error or disconnect/reset before headers')
+    expect(purchaseLog.cause).toBe(raw)
+    log.mockRestore()
   })
 
   it('blocks a paused gate', async () => {

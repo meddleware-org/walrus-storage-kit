@@ -73,7 +73,7 @@ const estimateStorageCost = async (_size: number, epochs: number): Promise<bigin
       <AccessGateCta gate-configured :has-access="false" :terms="terms" />
       <AccessGateCta gate-configured :has-access="false" :terms="terms" busy />
       <AccessGateCta gate-configured :has-access="false" :terms="null" />
-      <AccessGateCta gate-configured :has-access="false" :terms="null" terms-error="rpc unavailable" />
+      <AccessGateCta gate-configured :has-access="false" :terms="null" terms-error="This pass is not available right now. Try again in a moment, or contact the site." />
       <AccessGateCta
         gate-configured
         :has-access="false"

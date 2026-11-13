@@ -1,6 +1,6 @@
 {
   "name": "@meddleware/walrus-storage-kit",
-  "version": "0.1.40",
+  "version": "0.1.41",
   "description": "Shared Vue 3 UI for the Walrus upload relay: relay selection + tip estimation, NFT-gate access, and a blob-upload widget. Built on @meddleware/walrus-storage-client + @meddleware/access-gate-client.",
   "author": "Meddleware <dev@meddleware.co.uk>",
   "license": "0BSD",

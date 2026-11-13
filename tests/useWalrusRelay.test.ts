@@ -312,9 +312,13 @@ describe('useWalrusRelay follows its inputs (F16)', () => {
     const r = useWalrusRelay(current)
     await r.checkOperatorRelayHealth()
     await nextTick()
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
     current.value = { operator: 'http://relay.example.com', public: hosts.public }
     await nextTick()
     expect(r.configError.value).toMatch(/operator relay host/)
+    expect(log).toHaveBeenCalledTimes(1) // the cause goes to the console once, as the original error
+    expect(log.mock.calls[0]![1]).toBeInstanceOf(Error)
+    log.mockRestore()
     expect(r.availableRelays.value).toEqual([])
     expect(r.relayPending.value).toBe(false)
 

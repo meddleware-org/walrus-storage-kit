@@ -109,7 +109,8 @@ describe('UploadRelayStatus', () => {
 
   it('shows a configuration error and nothing else about the relay', () => {
     const w = mount(UploadRelayStatus, { props: { ...base, configError: 'host must use https', relays: [] } })
-    expect(w.get('[role="alert"]').text()).toContain('host must use https')
+    expect(w.get('[role="alert"]').text()).toBe('Uploads are unavailable right now. Try again later, or contact the site.')
+    expect(w.text()).not.toContain('https') // the cause is logged by the composable, not shown
     expect(w.text()).not.toContain('access pass')
   })
 

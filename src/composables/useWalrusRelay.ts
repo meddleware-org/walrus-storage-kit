@@ -191,6 +191,8 @@ export function useWalrusRelay(
         assertRelayHosts(toValue(hosts))
         configError.value = null
       } catch (e) {
+        // The text is for developers: the component shows plain words and this is logged, once per change.
+        console.error('useWalrusRelay: the relay hosts are not valid', e)
         configError.value = e instanceof Error ? e.message : String(e)
         return
       }
@@ -220,7 +222,7 @@ export function useWalrusRelay(
       if (!accessSatisfied.value) return []
       return [
         {
-          label: 'Meddleware relay (supports this app)',
+          label: 'Meddleware relay',
           host: operatorRelayHost.value,
           tip: operatorRelayTip.value,
           tipStatus: operatorTipStatus.value,

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { accessGateDeployment } from '@meddleware/access-gate-client/deployments'
 
 const fetchAccessNfts = vi.fn()
@@ -16,7 +16,13 @@ vi.mock('@meddleware/access-gate-client', async (importActual) => {
   }
 })
 
-import { useAccessGate, type GateClient, type RelayGateConfig } from '../src/composables/useAccessGate'
+import {
+  PURCHASE_FAILED_MESSAGE,
+  TERMS_UNAVAILABLE_MESSAGE,
+  useAccessGate,
+  type GateClient,
+  type RelayGateConfig,
+} from '../src/composables/useAccessGate'
 import { relayGateConfig } from '../src/constants'
 
 const D = accessGateDeployment('testnet')
@@ -88,10 +94,16 @@ const executor = () => ({
   waitForTransaction: vi.fn(async () => undefined),
 })
 
+/** `console.error` is where the cause of a failure goes; a test reads it instead of printing it. */
+let consoleError: MockInstance<typeof console.error>
+
 beforeEach(() => {
   fetchAccessNfts.mockReset()
   buildPurchaseTx.mockReset()
+  consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 })
+
+afterEach(() => consoleError.mockRestore())
 
 describe('useAccessGate pinning to the published deployment (F10)', () => {
   it('refuses a hand-built config that names another package or PlatformConfig', () => {
@@ -206,22 +218,34 @@ describe('useAccessGate purchase terms (F11)', () => {
     const { g, chain } = setup()
     chain.fail = new Error('rpc down')
     expect(await g.loadTerms()).toBeNull()
-    expect(g.termsError.value).toBe('rpc down')
+    expect(g.termsError.value).toBe(TERMS_UNAVAILABLE_MESSAGE)
     expect(g.terms.value).toBeNull()
+    // The cause is for developers: logged once, with the original error object.
+    expect(consoleError).toHaveBeenCalledTimes(1)
+    expect(consoleError.mock.calls[0]![1]).toBe(chain.fail)
+  })
+
+  it('says only plain words, with no gate id or chain detail, in termsError', async () => {
+    const { g, chain } = setup()
+    chain.fail = new Error('rpc down')
+    await g.loadTerms()
+    expect(g.termsError.value).not.toMatch(/rpc|0x|chain|gate|operator/i)
   })
 
   it('refuses a configured gate that is not a Gate of the published package', async () => {
     const { g, chain } = setup()
     chain.gateType = '0xdead::access_gate::Gate'
     expect(await g.loadTerms()).toBeNull()
-    expect(g.termsError.value).toMatch(/access pass is not available on testnet/)
+    expect(g.termsError.value).toBe(TERMS_UNAVAILABLE_MESSAGE)
+    expect(String(consoleError.mock.calls[0]![1])).toContain(`Gate ${GATE_ID} was not found on testnet`)
   })
 
   it('refuses a configured pass kind that disagrees with the gate', async () => {
     const { g, chain } = setup()
     chain.gate.soulbound = false
     expect(await g.loadTerms()).toBeNull()
-    expect(g.termsError.value).toMatch(/pass kind/)
+    expect(g.termsError.value).toBe(TERMS_UNAVAILABLE_MESSAGE)
+    expect(String(consoleError.mock.calls[0]![1])).toMatch(/pass kind/)
   })
 
   it('does not read anything for an ungated relay', async () => {
@@ -286,6 +310,7 @@ describe('useAccessGate purchase', () => {
     chain.gate.paused = true
     const ex = executor()
     await expect(g.purchase(ex, '0xalice')).rejects.toThrow(/paused/)
+    expect(g.purchaseError.value).toBe('Purchases are paused right now. Try again later.')
     expect(ex.signAndExecute).not.toHaveBeenCalled()
     expect(g.terms.value?.paused).toBe(true)
   })
@@ -295,8 +320,14 @@ describe('useAccessGate purchase', () => {
     await g.loadTerms()
     chain.fail = new Error('rpc down')
     const ex = executor()
-    await expect(g.purchase(ex, '0xalice')).rejects.toThrow(/Could not read the pass price from the chain: rpc down/)
+    await expect(g.purchase(ex, '0xalice')).rejects.toThrow(TERMS_UNAVAILABLE_MESSAGE)
+    expect(g.purchaseError.value).toBe(TERMS_UNAVAILABLE_MESSAGE)
     expect(ex.signAndExecute).not.toHaveBeenCalled()
+    // Once, with the original error: its message and its cause carry the technical detail.
+    expect(consoleError).toHaveBeenCalledTimes(1)
+    const logged = consoleError.mock.calls[0]![1] as Error
+    expect(logged.message).toBe('Could not read the pass price from the chain: rpc down')
+    expect(logged.cause).toBe(chain.fail)
   })
 
   it('reports an access_gate abort in words and leaves other errors alone', async () => {
@@ -307,9 +338,14 @@ describe('useAccessGate purchase', () => {
     await expect(g.purchase(aborting, '0xalice')).rejects.toThrow('The payment is less than the gate price.')
     expect(g.purchaseError.value).toBe('The payment is less than the gate price.')
 
+    expect(consoleError.mock.calls[0]![1]).toBe(abort)
+
     const rejected = new Error('User rejected the request')
     const declining = { signAndExecute: vi.fn(async () => { throw rejected }), waitForTransaction: vi.fn() }
     await expect(g.purchase(declining, '0xalice')).rejects.toBe(rejected)
+    // The person is not shown the wallet's text, only what to do; the developer gets the error.
+    expect(g.purchaseError.value).toBe(PURCHASE_FAILED_MESSAGE)
+    expect(consoleError).toHaveBeenLastCalledWith(expect.any(String), rejected)
   })
 
   it('does not claim an abort from another package', async () => {
@@ -334,7 +370,9 @@ describe('useAccessGate purchase', () => {
       expect(g.pendingPurchase.value?.digest).toBe('BUY1')
 
       // The user clicks buy again: it re-checks and refuses instead of buying.
-      await expect(g.purchase(ex, '0xalice')).rejects.toThrow(/BUY1.*not visible yet/)
+      await expect(g.purchase(ex, '0xalice')).rejects.toThrow(/went through but the pass is not visible yet/)
+      expect(g.purchaseError.value).not.toContain('BUY1') // the digest is for the console, not the page
+      expect(String(consoleError.mock.calls.at(-1)![1])).toContain('BUY1')
       expect(ex.signAndExecute).toHaveBeenCalledTimes(1)
 
       // Once the pass appears, the pending purchase clears and access is granted.

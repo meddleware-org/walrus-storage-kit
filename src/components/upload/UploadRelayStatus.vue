@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// The state of the upload relay, in words: a configuration error, the check in flight (an always-mounted live region), or a pass
+// The state of the upload relay, in words: a configuration error (plain words; the cause is logged by `useWalrusRelay`), the check in flight (an always-mounted live region), or a pass
 // being required. With `choose`, it also lets the user pick between relays when more than one is available.
 import { computed } from 'vue'
 import { UiLiveStatus, UiNotice, UiSegmentedControl } from '@meddleware/ui'
@@ -21,7 +21,7 @@ const options = computed(() => props.relays.map((r) => ({ id: r.host, label: r.l
 </script>
 
 <template>
-  <UiNotice v-if="configError" type="error" :message="`The relay settings are not valid, so uploads are unavailable: ${configError}`" />
+  <UiNotice v-if="configError" type="error" message="Uploads are unavailable right now. Try again later, or contact the site." />
   <UiLiveStatus label="Upload relay" :message="!configError && connected && pending ? 'Checking the upload relay…' : ''" />
   <UiNotice
     v-if="!configError && none"

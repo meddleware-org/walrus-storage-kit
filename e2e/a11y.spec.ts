@@ -30,14 +30,14 @@ defineA11ySuite(
   {
     'relay badges': async (page) => {
       await view('badges')(page)
-      for (const text of ['Relay unreachable', 'tip unknown', 'tip above the limit', 'Relay not available', 'Checking relay…']) {
+      for (const text of ['Relay unreachable', 'tip unknown', 'tip above the limit', 'Uploads are unavailable right now.', 'Checking relay…']) {
         await expect(page.getByText(text)).toBeVisible()
       }
     },
     'purchase prompt': async (page) => {
       await view('cta')(page)
       await expect(page.getByText('Gate owner receives').first()).toBeVisible()
-      await expect(page.getByText('The pass price could not be read from the chain')).toBeVisible()
+      await expect(page.getByText('This pass is not available right now. Try again in a moment, or contact the site.')).toBeVisible()
     },
     'upload: file step': upload('file'),
     'upload: options step': upload('options'),

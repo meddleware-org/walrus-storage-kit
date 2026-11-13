@@ -17,6 +17,17 @@ describe('useWalrusRelay availableRelays policy (anti-bypass)', () => {
     expect(r.selectedRelayHost.value).toBe(OP)
   })
 
+  it('labels the Meddleware relay in plain words, never "operator" or a note about supporting the app', async () => {
+    const hasAccess = ref<boolean | null>(true)
+    const r = useWalrusRelay({ operator: OP, public: PUB }, { gateConfigured: true, hasAccess })
+    r.operatorRelayAccessible.value = true
+    await nextTick()
+    expect(r.availableRelays.value.map((o) => o.label)).toEqual(['Meddleware relay'])
+    r.operatorRelayAccessible.value = false
+    await nextTick()
+    expect(r.availableRelays.value.map((o) => o.label)).toEqual(['Public relay (fallback)'])
+  })
+
   it('operator up + NO access ⇒ no relay available (paywall holds)', () => {
     const hasAccess = ref<boolean | null>(false)
     const r = useWalrusRelay({ operator: OP, public: PUB }, { gateConfigured: true, hasAccess })

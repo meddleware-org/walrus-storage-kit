@@ -74,6 +74,11 @@ They change only when `access-gate-sui` publishes a new deployment record. Bump
 - **`useGatedUpload(gate)` decides relay access for an upload.** `accessFor({ relayHost, publicHost, address, network, executor,
   sign, onStatus })` returns the `createGatedAccess` for a held pass, or `undefined` when none is needed (no gate, no pass, or the
   public relay: never spend a use there). Apps call it from `performUpload`; they do not rebuild the ports themselves.
+- **People-facing text is plain; the cause goes to the console.** What a person reads (`termsError`, `purchaseError`, the invalid-relay badge
+  and notice) says what to do ("This pass is not available right now. Try again in a moment, or contact the site.", "Uploads are
+  unavailable right now."), never a gate id, an RPC message, a function name or "operator" (D117: Meddleware's own relay is "Meddleware
+  relay"; spell Meddleware). The original error is logged once with `console.error`. Technical text belongs in the `Error` (or its `cause`)
+  a developer sees, not in a string a template renders.
 - **Composables over components.** `useWalrusRelay` and `useAccessGate` are the primary
   integration surface. The Vue components (`WalrusUpload`, `TipConfigBadge`, `AccessGateCta`)
   wire them together for common use cases; composables can be used directly for custom UIs.

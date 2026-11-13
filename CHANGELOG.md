@@ -4,6 +4,13 @@ All notable changes to `@meddleware/walrus-relay` are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [Semantic Versioning](https://semver.org/). Before 0.2.0, breaking changes ship as patch releases.
 
+## [0.1.41] - 2026-11-13
+
+### Changed
+
+- What a person reads is plain: the relay choice is "Meddleware relay"; `termsError`, `purchaseError` and the invalid-relay badge and notice say what to do ("This pass is not available right now. Try again in a moment, or contact the site.", "Uploads are unavailable right now.") and the cause is logged once with `console.error`.
+- A failed `purchase()` throws the same plain message for a price that cannot be read, a paused gate, changed terms or a purchase still being indexed (the original error is its `cause`, and in the console); a wallet's own error is rethrown as it came.
+
 ## [0.1.40] - 2026-11-12
 
 ### Changed

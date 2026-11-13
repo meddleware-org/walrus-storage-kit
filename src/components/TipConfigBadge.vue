@@ -26,8 +26,10 @@ async function refresh(): Promise<void> {
     if (mine !== generation) return // the host changed while this probe was in flight
     accessible.value = result.accessible
     health.value = result
-  } catch {
+  } catch (e) {
     if (mine !== generation) return
+    // A configuration fault a person cannot fix: plain words on the page, the detail for developers.
+    console.error('TipConfigBadge: the relay address is not valid', e)
     accessible.value = false
     invalid.value = true
     health.value = { tip: null, tipStatus: 'unknown', tipKind: null }
@@ -62,7 +64,7 @@ const state = computed(() => (loading.value ? 'loading' : invalid.value ? 'inval
 <template>
   <UiBadge :tone="tone" :symbol="loading ? false : undefined" :data-state="state" :data-tip="state === 'up' ? health.tipStatus : undefined">
     <template v-if="loading">Checking relay…</template>
-    <template v-else-if="invalid">Relay not available</template>
+    <template v-else-if="invalid">Uploads are unavailable right now.</template>
     <template v-else-if="accessible">Relay online · tip {{ tipLabel() }}</template>
     <template v-else>Relay unreachable</template>
   </UiBadge>

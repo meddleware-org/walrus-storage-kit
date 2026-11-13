@@ -78,6 +78,27 @@ They change only when `access-gate-sui` publishes a new deployment record. Bump
   integration surface. The Vue components (`WalrusUpload`, `TipConfigBadge`, `AccessGateCta`)
   wire them together for common use cases; composables can be used directly for custom UIs.
 
+## Layout and commands
+
+```text
+src/index.ts                        package entry: all public API
+src/constants.ts                    `relayGateConfig` and `assertPinnedGate` (gate config pinned to the published deployment)
+src/lib/relay.ts                    pure helpers (see below); src/lib/upload-steps.ts is the stepper catalogue
+src/composables/useWalrusRelay.ts   relay selection, health probe, tip estimation
+src/composables/useAccessGate.ts    NFT ownership check, purchase flow, consume builder
+src/composables/useGatedUpload.ts   relay access for an upload
+src/components/WalrusUpload.vue     upload widget (relay select + upload orchestration); components/upload/* are its parts
+src/components/TipConfigBadge.vue   relay reachability + tip display badge
+src/components/AccessGateCta.vue    "Purchase access" CTA for gated relays
+```
+
+`@meddleware/walrus-storage-ui` is the standalone SPA that consumes this library; this package is the pure library (no app entry point).
+
+```bash
+npm run type-check && npm run lint && npm test
+npm run test:e2e   # real-browser axe contrast gate over gallery/, every theme x season (needs Chromium)
+```
+
 ## Injection pattern for relay hosts
 
 Operator relay URLs are NOT hardcoded here. They are passed by the consuming app via the

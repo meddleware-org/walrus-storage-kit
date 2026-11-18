@@ -43,9 +43,36 @@ jobs:
       - name: Test
         run: npm test
 
-  e2e:
-    name: Real-browser accessibility (Playwright + axe, theme × season)
+  # The Playwright version in the lockfile, so the browser jobs use the image built for exactly that version.
+  playwright:
+    name: Playwright version
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: v
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+
+  e2e:
+    name: Real-browser accessibility (Playwright + axe, theme × season) (${{ matrix.project }})
+    needs: playwright
+    runs-on: ubuntu-latest
+    # Every test on all five browser projects, as before. Each project runs in its own job at the same time, so the
+    # run takes as long as the slowest project instead of all five in a row; each job runs in Playwright's image for
+    # the locked version (the same browser builds, their system libraries installed), so none downloads browsers or
+    # apt packages.
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.playwright.outputs.version }}-resolute
+      # Chromium's recommended shared-memory setting for containers.
+      options: --ipc=host
+    env:
+      # The image runs as root; Firefox refuses a HOME it does not own.
+      HOME: /root
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit, mobile-chrome, mobile-safari]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -56,11 +83,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install browsers
-        run: npx playwright install --with-deps chromium firefox webkit
-
       - name: Component gallery, every theme × season
-        run: npm run test:e2e
+        run: npm run test:e2e -- --project=${{ matrix.project }}
         env:
           E2E_BROWSERS: all
 

@@ -4,7 +4,7 @@ All notable changes to `@meddleware/walrus-relay` are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [Semantic Versioning](https://semver.org/). Before 0.2.0, breaking changes ship as patch releases.
 
-## [Unreleased]
+## [0.1.42] - 2026-11-19
 
 ### Changed
 

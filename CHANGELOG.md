@@ -4,6 +4,13 @@ All notable changes to `@meddleware/walrus-relay` are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [Semantic Versioning](https://semver.org/). Before 0.2.0, breaking changes ship as patch releases.
 
+## [Unreleased]
+
+### Changed
+
+- `@meddleware/walrus-storage-client` 0.0.35: opening browser storage for an upload removes expired consume records (nothing kept
+  for an upload that can no longer resume).
+
 ## [0.1.41] - 2026-11-13
 
 ### Changed

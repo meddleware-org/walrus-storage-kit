@@ -49,7 +49,7 @@
   },
   "dependencies": {
     "@meddleware/access-gate-client": "^0.0.13",
-    "@meddleware/walrus-storage-client": "^0.0.34",
+    "@meddleware/walrus-storage-client": "^0.0.35",
     "@meddleware/web-utils": "^0.0.4"
   },
   "devDependencies": {

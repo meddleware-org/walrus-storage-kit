@@ -69,3 +69,7 @@ npm run test:e2e  # Playwright + axe over gallery/, every theme x season (needs 
 ## License
 
 0BSD
+
+## Open standards
+
+What this project speaks, what is planned and where you can extend it: [docs/INTEROP.md](docs/INTEROP.md).

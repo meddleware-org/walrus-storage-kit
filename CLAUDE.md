@@ -169,3 +169,7 @@ inlineMeddleware` from `@meddleware/frontend-config/vitest`) and a test that ope
 - Do not import `@mysten/walrus` — the Walrus client is app-injected via `performUpload`.
 - Do not add wallet-standard imports — stay wallet-agnostic.
 - Do not add a build step — the package ships source for consumers to bundle.
+
+## Interoperability
+
+- [docs/INTEROP.md](docs/INTEROP.md): the standards this project speaks, what is planned, where to extend it, and what proves each claim.

@@ -25,6 +25,6 @@ const helpId = useId()
   />
   <UiNotice v-if="error" type="error" :message="error" />
   <UploadHint :id="helpId">
-    Select a file to continue. Requires <strong>WAL</strong> (storage) and <strong>SUI</strong> (gas + relay fee) in your wallet.
+    Select a file to continue. Requires <strong>WAL</strong> (storage) and <strong>SUI</strong> (network fee + relay fee) in your wallet.
   </UploadHint>
 </template>

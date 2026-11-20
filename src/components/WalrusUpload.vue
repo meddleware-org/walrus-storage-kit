@@ -156,7 +156,7 @@ const costLine = computed<string | null>(() => {
     // An unreadable or out-of-range tip is not a free relay: say so instead of leaving it out.
     parts.push(relayFeeStatus.value === 'unknown' ? 'relay fee unknown' : 'relay fee above the safety limit')
   }
-  return parts.length ? `Estimated cost: ${parts.join(' + ')} (+ gas)` : null
+  return parts.length ? `Estimated cost: ${parts.join(' + ')} (+ network fee)` : null
 })
 
 /** How many wallet approvals an upload through the selected relay needs, in words. */
@@ -442,7 +442,7 @@ async function runPendingCertify(): Promise<void> {
 
       <UploadHint v-if="costLine" class="wru-cost">{{ costLine }}</UploadHint>
       <UploadHint>
-        Requires <strong>WAL</strong> (storage) and <strong>SUI</strong> (gas + relay fee) in your wallet; {{ approvalsHint }}.
+        Requires <strong>WAL</strong> (storage) and <strong>SUI</strong> (network fee + relay fee) in your wallet; {{ approvalsHint }}.
       </UploadHint>
 
       <UploadRelayStatus

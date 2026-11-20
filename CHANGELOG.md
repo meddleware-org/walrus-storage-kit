@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+- Wording (copy standard, 2026-11-20): the network fee is called the network fee, not "gas", in the upload steps, the cost estimate and the
+  recovery message.
 - CI: `HOME=/root` is set on the browser-test command only, not the whole job, so the runner no longer warns that it cannot read
   `/root/.docker/config.json`.
 

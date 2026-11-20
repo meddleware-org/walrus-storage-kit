@@ -23,7 +23,7 @@ const label = computed(() => {
       Your blob is registered and paid for, but the upload to the relay did not complete. Retry the upload on the same registration — no second payment.
     </template>
     <template v-else>
-      Your blob was uploaded and paid for but not yet <strong>certified</strong> — certify it to finish (one wallet approval, gas only; no re-upload).
+      Your blob was uploaded and paid for but not yet <strong>certified</strong> — certify it to finish (one wallet approval, network fee only; no re-upload).
     </template>
     <UiButton :busy="busy" size="sm" @click="emit('retry')">{{ label }}</UiButton>
   </UiNotice>

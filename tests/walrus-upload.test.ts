@@ -173,13 +173,13 @@ describe('WalrusUpload: cost line', () => {
     await flushPromises()
     await button(w, /^Next$/).trigger('click')
     await flushPromises()
-    expect(w.get('.wru-cost').text()).toBe('Estimated cost: ~0.0530 WAL storage (53 epochs) + ~0.0020 SUI relay fee (+ gas)')
+    expect(w.get('.wru-cost').text()).toBe('Estimated cost: ~0.0530 WAL storage (53 epochs) + ~0.0020 SUI relay fee (+ network fee)')
     await button(w, /^Change options$/).trigger('click')
     await w.get('input[type="number"]').setValue('10')
     await flushPromises()
     await button(w, /^Next$/).trigger('click')
     await flushPromises()
-    expect(w.get('.wru-cost').text()).toBe('Estimated cost: ~0.0100 WAL storage (10 epochs) + ~0.0020 SUI relay fee (+ gas)')
+    expect(w.get('.wru-cost').text()).toBe('Estimated cost: ~0.0100 WAL storage (10 epochs) + ~0.0020 SUI relay fee (+ network fee)')
   })
 
   it('says the relay fee is unknown when the relay tip cannot be read, instead of leaving it out', async () => {
@@ -187,7 +187,7 @@ describe('WalrusUpload: cost line', () => {
     const w = mountWidget(vi.fn<Perform>(async () => result()))
     await flushPromises()
     await toReview(w)
-    expect(w.get('.wru-cost').text()).toBe('Estimated cost: relay fee unknown (+ gas)')
+    expect(w.get('.wru-cost').text()).toBe('Estimated cost: relay fee unknown (+ network fee)')
   })
 
   it('says so when the relay tip is above the safety limit', async () => {
@@ -195,7 +195,7 @@ describe('WalrusUpload: cost line', () => {
     const w = mountWidget(vi.fn<Perform>(async () => result()))
     await flushPromises()
     await toReview(w)
-    expect(w.get('.wru-cost').text()).toBe('Estimated cost: relay fee above the safety limit (+ gas)')
+    expect(w.get('.wru-cost').text()).toBe('Estimated cost: relay fee above the safety limit (+ network fee)')
   })
 
   it('says there is no relay fee for a no_tip relay', async () => {
@@ -203,7 +203,7 @@ describe('WalrusUpload: cost line', () => {
     const w = mountWidget(vi.fn<Perform>(async () => result()))
     await flushPromises()
     await toReview(w)
-    expect(w.get('.wru-cost').text()).toBe('Estimated cost: no relay fee (+ gas)')
+    expect(w.get('.wru-cost').text()).toBe('Estimated cost: no relay fee (+ network fee)')
   })
 
   it('ignores a storage estimate that arrives for an older duration', async () => {

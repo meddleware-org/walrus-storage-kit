@@ -4,6 +4,10 @@ All notable changes to `@meddleware/walrus-relay` are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [Semantic Versioning](https://semver.org/). Before 0.2.0, breaking changes ship as patch releases.
 
+## [Unreleased]
+
+- CI: the release workflow's `verify` job calls `node-ci.yml` (as `ui` does) instead of repeating every check in one job with `playwright install --with-deps`; the browser tests now run as one job per browser in Playwright's image (D129/D138). `node-ci.yml` gained the build and packed-files checks the old verify job ran, so they run on every push.
+
 ## [0.1.43] - 2026-11-20
 
 - Wording (copy standard, 2026-11-20): the network fee is called the network fee, not "gas", in the upload steps, the cost estimate and the

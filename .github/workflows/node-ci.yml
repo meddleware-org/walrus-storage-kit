@@ -4,6 +4,8 @@ on:
   push:
     branches: ["main"]
   pull_request:
+  # The release workflow (npm-publish.yml) calls this workflow as its `verify` job, so a tag runs exactly these checks.
+  workflow_call:
 
 permissions:
   contents: read
@@ -42,6 +44,20 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # The package builds and its tarball holds no tests or gallery (a broken build or a bloated tarball fails here, on every push, not
+      # only when a tag is cut).
+      - name: Build
+        run: npm run build --if-present
+
+      - name: Packed files (no tests, no gallery)
+        run: |
+          npm pack --dry-run --json | node -e "
+            const [p] = JSON.parse(require('fs').readFileSync(0, 'utf8'))
+            const bad = p.files.map((f) => f.path).filter((f) => /\.test\.|^(tests|gallery|e2e)\//.test(f))
+            if (bad.length) { console.error('::error::unexpected files in the tarball: ' + bad.join(', ')); process.exit(1) }
+            console.log('tarball:', p.files.length, 'files,', p.unpackedSize, 'bytes unpacked')
+          "
 
   # The Playwright version in the lockfile, so the browser jobs use the image built for exactly that version.
   playwright:

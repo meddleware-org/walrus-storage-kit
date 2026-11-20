@@ -1,8 +1,9 @@
 name: Publish (npm)
 
-# Publishes the package to npmjs on a v* tag. Publication is gated on a
-# self-contained `verify` job (type-check, lint, test, contrast gate, build) that re-runs the
-# checks against the exact tagged commit, so a broken tag never ships.
+# Publishes the package to npmjs on a v* tag. Publication is gated on a `verify` job that runs the same workflow as CI (audit,
+# type-check, lint, unit tests, build, package contents, and the real-browser contrast gate in all five browsers, one job per
+# browser in Playwright's image) on the exact tagged commit, so a broken tag never ships. (It used to repeat the checks in one job
+# with `playwright install --with-deps`, the slow apt install D129 replaced everywhere else.)
 # Authentication uses npm OIDC trusted publishing — no long-lived NPM_TOKEN.
 
 on:
@@ -18,39 +19,8 @@ env:
 
 jobs:
   verify:
-    name: Verify (type-check, lint, test, contrast)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '26'
-      - name: Install dependencies
-        run: npm ci
-      - name: Audit dependencies
-        run: node .github/audit-gate.mjs
-      - name: Type-check
-        run: npm run type-check
-      - name: Lint (stylelint, eslint + a11y + chain-access boundary, html-validate)
-        run: npm run lint
-      - name: Unit tests
-        run: npm test
-      - name: Install browsers
-        run: npx playwright install --with-deps chromium firefox webkit
-      - name: Real-browser contrast gate (every theme x season)
-        run: npm run test:e2e
-        env:
-          E2E_BROWSERS: all
-      - name: Build
-        run: npm run build --if-present
-      - name: Packed files (no tests, no gallery)
-        run: |
-          npm pack --dry-run --json | node -e "
-            const [p] = JSON.parse(require('fs').readFileSync(0, 'utf8'))
-            const bad = p.files.map((f) => f.path).filter((f) => /\.test\.|^(tests|gallery|e2e)\//.test(f))
-            if (bad.length) { console.error('::error::unexpected files in the tarball: ' + bad.join(', ')); process.exit(1) }
-            console.log('tarball:', p.files.length, 'files,', p.unpackedSize, 'bytes unpacked')
-          "
+    name: Verify (CI checks)
+    uses: ./.github/workflows/node-ci.yml
 
   publish-npm:
     name: npmjs (@meddleware/walrus-storage-kit)

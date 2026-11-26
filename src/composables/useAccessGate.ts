@@ -1,3 +1,8 @@
+// File: `useAccessGate`, the reactive NFT-gate state of the operator relay (does the wallet hold a pass, what does a pass cost, buy one, build the consume transaction).
+// Role: a composable with no UI and no wallet; the app injects the Sui client and a transaction executor. All chain reads and transaction building are delegated to
+// `@meddleware/access-gate-client` (this library builds no transaction itself: CLAUDE.md, invariants), and every config is pinned to the published deployment first.
+// Main exports: `useAccessGate`, `PENDING_PURCHASE_MS`, the two user-facing messages and the `GateExecutor`, `GateClient`, `PurchaseTerms` and `RelayGateConfig` types.
+// Related: `constants.ts` (`assertPinnedGate`), `useGatedUpload.ts` (turns this state into the relay access of one upload), `useWalrusRelay.ts` (reads `hasAccess`).
 import { computed, ref } from 'vue'
 import type { Transaction } from '@mysten/sui/transactions'
 import {
@@ -94,6 +99,9 @@ export interface GateExecutor {
   waitForTransaction(digest: string): Promise<unknown>
 }
 
+/** How long a submitted-but-not-yet-visible purchase blocks buying again (2 minutes). */
+export const PENDING_PURCHASE_MS = 120_000
+
 /**
  * Reactive NFT-gate state for the operator relay, built on `@meddleware/access-gate-client`
  * (ownership reads and the purchase/consume transactions).
@@ -103,10 +111,9 @@ export interface GateExecutor {
  * pass. Relay access for an upload (consume + signed proof, with resume) is
  * `createGatedAccess` from `@meddleware/walrus-storage-client/flow`, given this composable's
  * `buildConsume`.
+ *
+ * @throws {Error} if `gate` is not the published deployment of `network` (`assertPinnedGate`).
  */
-/** How long a submitted-but-not-yet-visible purchase blocks buying again (2 minutes). */
-export const PENDING_PURCHASE_MS = 120_000
-
 export function useAccessGate(deps: {
   /** The Walrus network the gate is on; passed to `getClient`, and the deployment `gate` must match. */
   network: WalrusNetwork
@@ -131,7 +138,9 @@ export function useAccessGate(deps: {
   const singleUse = computed(() => variant.value?.kind === 'singleUse')
   /** Object id of the held access NFT (for the single-use consume step); null if none. */
   const nftId = ref<string | null>(null)
+  /** True while an ownership check is in flight. */
   const checking = ref(false)
+  /** Why the last ownership check failed (a developer-facing message; the purchase path stays open); null otherwise. */
   const error = ref<string | null>(null)
   /**
    * A purchase that executed but whose pass is not visible yet (indexing). While it is set,
@@ -143,6 +152,7 @@ export function useAccessGate(deps: {
 
   /** The terms last read from the chain (what the purchase prompt shows); null until read. */
   const terms = ref<PurchaseTerms | null>(null)
+  /** True while the terms are being read from the chain. */
   const termsLoading = ref(false)
   /**
    * Why the terms could not be read (the purchase stays blocked), in plain words for the person; null
@@ -151,6 +161,7 @@ export function useAccessGate(deps: {
   const termsError = ref<string | null>(null)
   /** Why the last purchase did not complete, in plain words for the person; null otherwise. The cause is logged. */
   const purchaseError = ref<string | null>(null)
+  // Like `generation`, for the terms: a slower, older read never overwrites a newer one.
   let termsGeneration = 0
 
   /** Read the gate and the PlatformConfig and derive the terms. Pure: it sets no state. */
@@ -289,6 +300,10 @@ export function useAccessGate(deps: {
     }
   }
 
+  /**
+   * The purchase itself (`purchase` wraps it with the error reporting): refuses while an earlier purchase is still becoming visible, re-reads and compares the terms,
+   * signs only for terms the user has seen, then re-checks ownership until the pass appears.
+   */
   async function runPurchase(g: RelayGateConfig, executor: GateExecutor, address: string): Promise<void> {
     const pending = pendingPurchase.value
     if (pending && Date.now() - pending.at < PENDING_PURCHASE_MS) {

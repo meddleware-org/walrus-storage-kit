@@ -1,3 +1,5 @@
+// Unit tests for `src/lib/relay.ts`, the pure relay helpers: tip parsing and estimation, the health probe, host validation, blob URLs and amount formatting. Plain functions with a
+// stubbed `fetch`; no DOM and no Vue. The finding ids (F4, F9, F12, F22) are this repository's audit findings.
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   parseTipFromConfig,
@@ -19,6 +21,7 @@ import {
   type WalrusNetwork,
 } from '../src/lib/relay.js'
 
+// Display of coin amounts: four decimals normally, but never rounding a real amount down to 0.0000, and exact zero as "0".
 describe('formatCoinAmount', () => {
   it('shows 4 decimals for normal amounts', () => {
     expect(formatCoinAmount(13_100_000n, 'WAL')).toBe('0.0131 WAL')
@@ -32,17 +35,21 @@ describe('formatCoinAmount', () => {
   })
 })
 
+// Parsing a relay's `/v1/tip-config` body into a tip in MIST. The relay is untrusted: garbage, negative and absurd values become `null` (unknown), never a number that could mislead.
 describe('parseTipFromConfig', () => {
+  // A constant tip schedule is its amount in MIST.
   it('reads a flat const tip', () => {
     expect(parseTipFromConfig({ send_tip: { kind: { const: 100000 } } })).toBe(100000n)
   })
 
+  // A linear schedule, without a size, is its base (a floor).
   it('reads a linear base tip', () => {
     expect(
       parseTipFromConfig({ send_tip: { kind: { linear: { base: 5000000, encoded_size_mul_per_kib: 5 } } } }),
     ).toBe(5000000n)
   })
 
+  // Empty, partial or missing schedules are unknown, not zero.
   it('returns null when there is no tip', () => {
     expect(parseTipFromConfig({})).toBeNull()
     expect(parseTipFromConfig({ send_tip: {} })).toBeNull()
@@ -50,26 +57,31 @@ describe('parseTipFromConfig', () => {
     expect(parseTipFromConfig({ send_tip: { kind: { linear: {} } } })).toBeNull()
   })
 
+  // A value that is not a number is unknown; parsing never throws.
   it('does not throw on garbage', () => {
     expect(parseTipFromConfig({ send_tip: { kind: { const: 'not-a-number' } } })).toBeNull()
   })
 
+  // The ceiling itself is allowed; one MIST more is not (next test).
   it('accepts a tip exactly at the ceiling', () => {
     expect(parseTipFromConfig({ send_tip: { kind: { const: MAX_TIP_MIST.toString() } } })).toBe(MAX_TIP_MIST)
   })
 
+  // A relay reporting thousands of SUI must not surface as an estimate: anything above `MAX_TIP_MIST` is unknown.
   it('clamps an absurdly large tip to null (defense-in-depth)', () => {
     // A malicious relay reporting thousands of SUI — must not surface as an estimate.
     expect(parseTipFromConfig({ send_tip: { kind: { const: (MAX_TIP_MIST + 1n).toString() } } })).toBeNull()
     expect(parseTipFromConfig({ send_tip: { kind: { linear: { base: '1000000000000000000' } } } })).toBeNull()
   })
 
+  // Negative values are unknown: a relay could otherwise make the estimate negative.
   it('rejects a negative tip', () => {
     expect(parseTipFromConfig({ send_tip: { kind: { const: -1 } } })).toBeNull()
     expect(parseTipFromConfig({ send_tip: { kind: { linear: { base: -500 } } } })).toBeNull()
   })
 })
 
+// The public URL of a raw blob on the aggregator: per network, with a custom host, the blob id percent-encoded and https required.
 describe('walrusBlobUrl', () => {
   it('builds an aggregator URL for the network', () => {
     expect(walrusBlobUrl('testnet', 'abc')).toBe(
@@ -89,8 +101,10 @@ describe('walrusBlobUrl', () => {
   })
 })
 
+// json(body): a `Response` carrying a JSON body, as a relay would send.
 const json = (body: unknown, init?: ResponseInit): Response => new Response(JSON.stringify(body), init)
 
+// `probeRelay` never throws for an outage (it reports `accessible: false`), but does throw for a host that is not https: a configuration error must not read as "unreachable".
 describe('probeRelay', () => {
   afterEach(() => vi.unstubAllGlobals())
 
@@ -163,6 +177,7 @@ describe('probeRelay', () => {
   })
 })
 
+// The four tip statuses: none (advertised), known, unknown (unreadable) and over-ceiling.
 describe('describeTip', () => {
   it('separates none, known, unknown and over-ceiling', () => {
     expect(describeTip(null)).toEqual({ tip: null, status: 'unknown' })
@@ -173,6 +188,7 @@ describe('describeTip', () => {
   })
 })
 
+// Audit F22: the body is read with a size cap, so a hostile relay cannot make the page buffer unbounded data; an oversized body is an unknown tip, not an error and not a free relay.
 describe('bounded tip-config body (F22, TS-M2)', () => {
   afterEach(() => vi.unstubAllGlobals())
 
@@ -211,6 +227,7 @@ describe('bounded tip-config body (F22, TS-M2)', () => {
   })
 })
 
+// Audit F4 and F12: https is required, plain http only for loopback (a testbed), and hosts are compared by origin.
 describe('host validation (F4, F12)', () => {
   it('allows https and plain http only on loopback', () => {
     expect(() => requireHttpsHost('https://relay.example', 't')).not.toThrow()
@@ -232,6 +249,7 @@ describe('host validation (F4, F12)', () => {
   })
 })
 
+// Audit F22: the network name is looked up as an own key, so a prototype name such as `constructor` is an unknown network.
 describe('walrusBlobUrl network lookup (F22)', () => {
   it('uses own keys only: a prototype name is an unknown network, not an accident', () => {
     for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
@@ -244,6 +262,7 @@ describe('walrusBlobUrl network lookup (F22)', () => {
   })
 })
 
+// The exact form of an amount (every digit, no rounding): the figure shown is the figure paid.
 describe('formatCoinExact', () => {
   it('writes the amount exactly, with no rounding', () => {
     expect(formatCoinExact(10_000_001n, 'SUI')).toBe('0.010000001 SUI')
@@ -254,12 +273,14 @@ describe('formatCoinExact', () => {
   })
 })
 
+// The single-reservation ceiling matches Walrus's `max_epochs_ahead`.
 describe('constants', () => {
   it('caps epochs at Walrus max_epochs_ahead', () => {
     expect(MAX_SINGLE_RESERVATION_EPOCHS).toBe(53)
   })
 })
 
+// A linear schedule charges a base plus a per-KiB part on the encoded size; the operator relay's worst case stays far below the ceiling, so no legitimate tip is rejected.
 describe('linear tip schedules', () => {
   const linear = { send_tip: { kind: { linear: { base: 1_000_000, encoded_size_mul_per_kib: 10 } } } }
 

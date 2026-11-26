@@ -1,3 +1,7 @@
+// File: `useWalrusRelay`, the relay selection, health check and fee estimate behind the upload widget. Role: a composable with no UI and no wallet; the consuming app injects the
+// operator and public relay hosts (and optionally the NFT-gate state), and `WalrusUpload` reads what it returns. It imports only the pure helpers in `lib/relay.ts`, never
+// `@mysten/walrus`. Main exports: `useWalrusRelay`, `HEALTH_RECHECK_DELAYS_MS` and the `WalrusRelayHosts`, `RelayAccessOptions` and `RelayOption` types. Related: `lib/relay.ts`
+// (the fetching and parsing), `useAccessGate.ts` (where `hasAccess` comes from), `components/WalrusUpload.vue`.
 import { ref, computed, watch, toValue, getCurrentScope, onScopeDispose } from 'vue'
 import type { MaybeRefOrGetter, Ref } from 'vue'
 import { formatCoinAmount, mistToSui } from '@meddleware/web-utils'
@@ -103,11 +107,14 @@ export function useWalrusRelay(
     () => configError.value === null && originOf(operatorRelayHost.value) !== originOf(publicRelayHost.value),
   )
   const gateConfigured = computed(() => toValue(access).gateConfigured ?? false)
+  /** The gate's ownership result: `null` while checking, `undefined` when there is no gate wiring. */
   const hasAccessValue = (): boolean | null | undefined => toValue(access).hasAccess?.value
 
   // Access is satisfied when there is no gate, or the ownership check confirmed access.
+  // (Exposed so the widget can word the purchase prompt.)
   const accessSatisfied = computed(() => !gateConfigured.value || hasAccessValue() === true)
 
+  /** The host the upload will use; kept pointing at an available relay by `ensureValidSelection`. */
   const selectedRelayHost = ref(initial.operator)
   const operatorRelayAccessible = ref<boolean | null>(null) // null = checking, true/false = result
   const operatorTipConfig = ref<RelayTipConfig | null>(null)
@@ -120,18 +127,27 @@ export function useWalrusRelay(
     operatorTipConfig.value ? estimateTipMist(operatorTipConfig.value) : null,
   )
   const publicRelayTip = computed(() => (publicTipConfig.value ? estimateTipMist(publicTipConfig.value) : null))
+  /** The size of the file being estimated, in raw bytes (0 until a file is chosen). */
   const fileSizeBytes = ref(0)
 
   // ── Health check ────────────────────────────────────────────────────────────
+  /** Whether the app has asked for a health check yet (a host change restarts it only if so). */
   let healthRequested = false
+  // Each check takes a number; an answer for an earlier one (or after `stop`) is discarded.
   let healthGeneration = 0
+  /** The pending re-check of a failed operator relay. */
   let recheckTimer: ReturnType<typeof setTimeout> | null = null
 
+  /** Cancel the pending re-check, if any. */
   function clearRecheck(): void {
     if (recheckTimer !== null) clearTimeout(recheckTimer)
     recheckTimer = null
   }
 
+  /**
+   * One health probe. `mine` is the generation that started it (stale answers are dropped); `attempt` counts re-checks (the public relay's tip is read on the first only).
+   * A failed operator relay schedules the next attempt itself.
+   */
   async function probeOnce(mine: number, attempt: number): Promise<void> {
     const { operator, public: publicHost } = toValue(hosts)
     const operatorPromise = isOperatorRelayConfigured.value ? fetchTipConfig(operator) : null

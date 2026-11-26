@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// File: UploadProgress (exported to the widget as `UploadProgressDialog`). Props: `open`, `step`, `gated`, `status`. Related: `../WalrusUpload.vue`, `../../lib/upload-steps.ts` (the catalogues),
+// `@meddleware/ui` (`UiDialog`, `UiStepper`, `UiLiveStatus`).
 // The blocking progress while an upload runs: a non-dismissible native modal (the page behind is inert and focus stays inside), a
 // stepper the upload walks through when the app reports structured progress, and the current step in words (a legacy string-only
 // caller gets just the words).
@@ -18,8 +20,11 @@ const props = defineProps<{
   status: string
 }>()
 
+/** The steps to draw: a gated upload has the extra leading access step. */
 const catalogue = computed(() => (props.gated ? GATED_UPLOAD_STEPS : CORE_UPLOAD_STEPS))
+/** Position of the reported step in the catalogue, or -1 before the app reports one (then no stepper is drawn). */
 const index = computed(() => (props.step ? catalogue.value.findIndex((s) => s.key === props.step) : -1))
+/** The stepper's steps: those before the active one are done, the active one is busy, the rest pending. */
 const steps = computed<StepperStep[]>(() =>
   catalogue.value.map((s, i) => ({ id: s.key, label: s.label, status: i < index.value ? 'done' : i === index.value ? 'busy' : 'pending' })),
 )

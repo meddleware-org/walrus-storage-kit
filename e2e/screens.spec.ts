@@ -2,6 +2,7 @@
 import type { Page } from '@playwright/test'
 import { defineShots } from '@meddleware/frontend-config/shots'
 
+/** The gallery view `v` with the upload scripted to `fail`, plus a short wait so the page has finished painting before the screenshot. */
 const view = (v: string, fail = 'none') => async (page: Page) => {
   await page.goto(`/?view=${v}&fail=${fail}`)
   await page.waitForSelector('main')
@@ -14,11 +15,14 @@ const upload = (to: 'options' | 'review' | 'progress', fail = 'none') => async (
   await page.setInputFiles('input[type="file"]', { name: 'icon.png', mimeType: 'image/png', buffer: Buffer.from([1, 2, 3]) })
   await page.getByLabel('Storage duration').waitFor() // choosing a file moves the widget to its options step
   if (to === 'options') return
+  // Next: the review step.
   await page.getByRole('button', { name: 'Next' }).click()
+  // The progress dialog is open only after Upload is pressed (the gallery's upload then hangs on purpose).
   if (to === 'progress') await page.getByRole('button', { name: 'Upload to Walrus' }).click()
   await page.waitForTimeout(300)
 }
 
+// One screenshot per named state (written under the shared shots directory); they are for looking, not asserting.
 defineShots({
   badges: view('badges'),
   cta: view('cta'),

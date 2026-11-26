@@ -11,8 +11,10 @@ import AccessGateCta from '../src/components/AccessGateCta.vue'
 import TipConfigBadge from '../src/components/TipConfigBadge.vue'
 import type { PurchaseTerms } from '../src/composables/useAccessGate'
 
+// Register the `toHaveNoViolations` matcher (its types are in tests/helpers/vitest-axe.d.ts).
 expect.extend(axeMatchers)
 
+// Purchase terms for the prompt's markup tests (the values do not matter here, only that every part renders).
 const terms: PurchaseTerms = {
   network: 'testnet',
   gateId: `0x${'a1'.repeat(32)}`,
@@ -28,10 +30,13 @@ const terms: PurchaseTerms = {
 // "Not implemented" before returning null. Return null up front — the same result axe already
 // gets — so the noise goes away without changing what is tested.
 HTMLCanvasElement.prototype.getContext = (() => null) as typeof HTMLCanvasElement.prototype.getContext
+// axe options: the `region` rule (all content in landmarks) is off, because a component under test is a fragment, not a whole page.
 const opts = { rules: { region: { enabled: false } } }
 
+// jsdom has no native `<dialog>` behaviour: install the shared shim so the progress and duplicate dialogs can open.
 beforeAll(installDialogShim)
 
+// Mock the relay composable: no network, one public relay on offer, so `WalrusUpload` renders its first step deterministically.
 vi.mock('../src/composables/useWalrusRelay.js', async () => {
   const { ref, computed } = await import('vue')
   return {
@@ -47,6 +52,7 @@ vi.mock('../src/composables/useWalrusRelay.js', async () => {
   }
 })
 
+// Keep the real helpers but make the badge's probe answer "unreachable", so it never touches the network.
 vi.mock('../src/lib/relay.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/lib/relay.js')>()),
   probeRelay: async () => ({ accessible: false, tip: null, tipStatus: 'unknown', tipKind: null }),
@@ -72,6 +78,7 @@ describe('walrus-storage-kit components (axe)', () => {
     expect(await axe(w.html(), opts)).toHaveNoViolations()
   })
 
+  // Every state of the prompt: terms still loading, terms unreadable, gate paused, last purchase failed.
   it('AccessGateCta (terms loading, terms error, paused, purchase error) has no violations', async () => {
     for (const props of [
       { terms: null },

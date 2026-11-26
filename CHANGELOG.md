@@ -1,11 +1,13 @@
 # Changelog
 
-All notable changes to `@meddleware/walrus-relay` are documented here.
+All notable changes to `@meddleware/walrus-storage-kit` (published before 2026-10-23 as `@meddleware/walrus-relay`) are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [Semantic Versioning](https://semver.org/). Before 0.2.0, breaking changes ship as patch releases.
 
 ## [Unreleased]
 
+- Documentation: every file is annotated line by line and has a header (every declaration has a doc comment, the tests say what they prove); `CONTRIBUTING.md` added; README Development section; CLAUDE.md Gotchas and Related; the changelog names the package correctly.
+- CI: the audit step runs `npx --no-install mw-audit-gate` from `@meddleware/frontend-config` instead of a copy of the gate in `.github/` (FU-0196); same gate, same allowlist.
 - CI: the release workflow's `verify` job calls `node-ci.yml` (as `ui` does) instead of repeating every check in one job with `playwright install --with-deps`; the browser tests now run as one job per browser in Playwright's image (D129/D138). `node-ci.yml` gained the build and packed-files checks the old verify job ran, so they run on every push.
 
 ## [0.1.43] - 2026-11-20

@@ -14,18 +14,22 @@ on:
   schedule:
     - cron: '30 3 * * *' # nightly, staggered after walrus-storage-client
 
+# Read-only: the job needs nothing but the checkouts.
 permissions:
   contents: read
 
+# No tool may phone home from CI (the fleet's privacy rule).
 env:
   DO_NOT_TRACK: "1"
 
 jobs:
+  # One job: bring the testbed up, run the suite against it, tear it down.
   localnet:
     name: walrus-storage-kit localnet suite
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      # The three repositories are checked out side by side under repos/, the layout the harness and the suite expect.
       - name: Checkout walrus-storage-kit (into repos/walrus-storage-kit)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,10 +52,12 @@ jobs:
           ref: ${{ vars.ACCESS_GATE_REF || 'bf23517a1362e080e47ca96e4cc0aae4731dd366' }}
           path: repos/access-gate-sui
 
+      # Node 26 is the fleet baseline (D56).
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '26'
 
+      # The suiup archive is verified against a pinned SHA-256, and so is the installed `sui` binary.
       - name: Install sui CLI (suiup)
         run: |
           curl -fsSLo /tmp/suiup.tgz "https://github.com/MystenLabs/suiup/releases/download/v0.0.14/suiup-Linux-musl-x86_64.tar.gz"
@@ -66,6 +72,7 @@ jobs:
           # Cannot register the localnet env yet — the node starts in the next step.
           "$HOME/.local/bin/sui" client envs || true
 
+      # Docker Compose brings up the Sui and Walrus localnet and the upload relay; the bootstrap script deploys the access gate onto it and writes `.env.localnet`.
       - name: Bring up + bootstrap the localnet testbed
         working-directory: repos/walrus-storage-client/localnet
         run: |
@@ -75,16 +82,19 @@ jobs:
           "$HOME/.local/bin/sui" client switch --env localnet
           bash scripts/bootstrap-localnet.sh
 
+      # `npm ci` installs exactly the lockfile.
       - name: Install deps
         working-directory: repos/walrus-storage-kit
         run: npm ci
 
+      # The ids and endpoints the bootstrap wrote are exported (`set -a`) so the suite finds them.
       - name: Run localnet integration suite
         working-directory: repos/walrus-storage-kit
         run: |
           set -a && source ../walrus-storage-client/localnet/.env.localnet && set +a
           npm run test:integration
 
+      # Always runs, so a failed suite does not leave the testbed's containers behind.
       - name: Tear down
         if: always()
         working-directory: repos/walrus-storage-client/localnet

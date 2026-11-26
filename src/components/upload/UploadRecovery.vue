@@ -1,16 +1,20 @@
 <script setup lang="ts">
+// File: UploadRecovery. Props: `kind` (`upload` or `certify`), `busy`. Emits: `retry`. Related: `../WalrusUpload.vue` (holds the retry closures and renders one of these).
 // What to do when an upload stopped part-way, with money already spent: retry the relay upload on the same registration, or
 // certify a blob that is stored but not yet certified. Neither pays again.
 import { computed } from 'vue'
 import { UiButton, UiNotice } from '@meddleware/ui'
 
 const props = defineProps<{
+  /** What stopped: the relay upload (after registration) or the certification (after the upload). */
   kind: 'upload' | 'certify'
   /** The retry is running. */
   busy: boolean
 }>()
+/** The person pressed the retry button. */
 const emit = defineEmits<{ retry: [] }>()
 
+/** The button's text for the kind and the busy state. */
 const label = computed(() => {
   if (props.kind === 'upload') return props.busy ? 'Retrying…' : 'Retry upload'
   return props.busy ? 'Certifying…' : 'Certify blob'

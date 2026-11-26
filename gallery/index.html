@@ -1,12 +1,16 @@
+<!-- File: the gallery's page: an empty mount point and the script that builds the gallery (main.ts). Served by `vite preview` for the Playwright run (playwright.config.ts). -->
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- UTF-8, and a viewport that follows the device width so the narrow-screen checks mean something. -->
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>@meddleware/walrus-storage-kit gallery</title>
   </head>
   <body>
+    <!-- Where the gallery is mounted. -->
     <div id="app"></div>
+    <!-- The entry module: loads the design tokens and builds the gallery. -->
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

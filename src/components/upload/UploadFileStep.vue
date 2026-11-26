@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// File: UploadFileStep (a fragment: the file input, an error notice and a hint). Props: `accept`, `error`. Emits: `select`. Related: `../WalrusUpload.vue` (checks and reads the file).
 // Step 1 of the upload: choose the file. It reports the chosen file (or none); the widget checks and reads it.
 import { useId } from 'vue'
 import { UiNotice } from '@meddleware/ui'
@@ -10,8 +11,10 @@ defineProps<{
   /** Why the last choice was refused, if it was. */
   error?: string | null
 }>()
+/** The chosen file, or `null` when the choice was cleared. */
 const emit = defineEmits<{ select: [file: File | null] }>()
 
+/** A unique id that ties the hint text to the input (`aria-describedby`). */
 const helpId = useId()
 </script>
 

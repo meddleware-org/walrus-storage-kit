@@ -1,4 +1,4 @@
-# Security Audit — `walrus-relay`
+# Security Audit — `walrus-storage-kit` (formerly `walrus-relay`)
 
 **Classification:** Internal security review (awaiting external review)
 **Project:** walrus-relay (`@meddleware/walrus-storage-kit`) — the shared Vue 3 UI library for the Walrus
@@ -20,15 +20,34 @@ upload relay.
 - AUDIT_TEMPLATE_SUI_CLIENT.md (2026-10-08)
 - AUDIT_TEMPLATE_TS.md (2026-11-01)
 - AUDIT_TEMPLATE_A11Y.md (2026-11-01), gallery sweeps
+- **Added 2026-11-26 (Part B documentation pass):** AUDIT_TEMPLATE_DOCS.md (2026-11-20); AUDIT_TEMPLATE_RFC.md (2026-11-19), partial: URL syntax, JSON, HTTP and the Wallet Standard;
+  AUDIT_TEMPLATE_IOP.md (2026-11-19), partial: the relay interface, versioning, the CI dependencies; AUDIT_TEMPLATE_PRIV.md (2026-11-20), partial: one consume record in the page's storage,
+  no third-party requests of its own.
 
 Not triggered: AUTH (no credentials; access proofs live in walrus-storage-client and access-gate-gateway-client), SEAL,
 OPS (the integration workflow reuses walrus-storage-client's localnet harness, audited there; it publishes
 nothing to a real chain), IMG (no image; the library is not deployed from one), PROXY, WORKERS, GO,
 RUST, SITE, PLATFORM.
 
+**Front matter (DOCS, RFC, IOP and PRIV lenses, added 2026-11-26):**
+
+| Field | Value |
+| --- | --- |
+| Documentation status | ledger (workspace `docs/audit/DOCS_LEDGER.tsv`): 61 tracked files, 58 done (56 measured against the thresholds), 3 excluded (the lockfile, `LICENSE` and the generated `docs/INTEROP.md`), 0 pending, 0 fu (2026-11-26 pass) |
+| Required documents | README, CHANGELOG, SECURITY, CONTRIBUTING (added 2026-11-26), LICENSE (0BSD), CLAUDE.md, AGENTS.md: all present |
+| Doc lints | `check-docs.mjs` (workspace) is the gate. The shared `eslint-plugin-jsdoc` fragment is switched on here after the Phase 5 release of `@meddleware/eslint-config` |
+| Standards spoken | URL syntax (RFC 3986) and HTTPS — every relay host is validated (https; http only on loopback); HTTP semantics (RFC 9110) and the Fetch API (WHATWG) — the tip-config probe, with a timeout and a size cap; JSON (RFC 8259) — the relay's `/v1/tip-config` body; Wallet Standard — through `@meddleware/wallet-adapter`, never imported here; HTML and WAI-ARIA with WCAG 2.2 AA and AAA — the components, proven in the gallery sweep; SPDX `0BSD`, Sigstore / SLSA — as the other packages. The relay's `/v1/tip-config` interface is the Walrus operator's own, not a standard |
+| Deviations | none |
+| Drafts relied on | none (RFC 9457 problem details for relay errors is planned: `docs/INTEROP.md`) |
+| Data a person can take away | none held. A single-use consume record is kept in the page's storage between attempts (below) |
+| Personal data | none held. The kit makes requests only to the relay hosts the app passes (the operator relay and the public relay) and reads gate objects through the app's client; the connected wallet address is passed in by the app, never stored here |
+
 **Deployment status:**
 
-- **Current (2026-11-05): `0.1.37` is released to npm** (CI green, trusted publishing; dependency alignment on `@meddleware/ui` ^0.1.38, `design-tokens` ^0.1.13, `web-utils` ^0.0.2, `frontend-config` ^0.0.2); `walrus-storage-ui` 0.1.67 and `token-issuance-ui` 0.0.44 consume it and are deployed. The bullets below are the earlier history, kept as written.
+- **Current (2026-11-26): npm `0.1.43` is `latest`** (tag `v0.1.43` = `7ad372d`; two commits since, `d39b3a3` (CI) and `55e0a12` (the interoperability page), nothing in `src/`). The tarball is 23 files,
+  127.1 kB unpacked, 40.4 kB packed (`npm pack --dry-run`). Consumers: `walrus-storage-ui` and `token-issuance-ui` (both `^0.1.43`). Two Dependabot pull requests are open (#24, the minor and patch group
+  of 12 updates; #23, jsdom 30.1.3 → 31.0.1). 196 tests pass. The package's own audit gate is now `mw-audit-gate` (F29).
+- **Previously (2026-11-05): `0.1.37` is released to npm** (CI green, trusted publishing; dependency alignment on `@meddleware/ui` ^0.1.38, `design-tokens` ^0.1.13, `web-utils` ^0.0.2, `frontend-config` ^0.0.2); `walrus-storage-ui` 0.1.67 and `token-issuance-ui` 0.0.44 consume it and are deployed. The bullets below are the earlier history, kept as written.
 
 - **2026-10-22: npm `latest` is 0.1.33** (tag `v0.1.33` = `d8a1412`): 0.1.32 (tag `v0.1.32`, 2026-10-19) lowered `MAX_TIP_MIST` to 0.005 SUI (F1); 0.1.33 takes `@meddleware/walrus-storage-client` `^0.0.30` and `@meddleware/access-gate-client` `^0.0.10`
   (the stale-indexer fallback, and `access-gate-gateway-client` 0.0.18's rules including the gated flow's real challenge expiry; walrus-storage-client audit F26). No source change in this package for 0.1.33. Consumers: walrus-storage-ui 0.1.61 and token-issuance-ui 0.0.38 at `^0.1.33`.
@@ -967,6 +986,27 @@ Scope: the changes since the 2026-10-19 review: the access proof v3 and `access-
 **Impact:** a layout or focus regression in the widget would pass this repository's CI and surface (if at all) in an app.
 **Remediation / evidence:** `e2e/a11y.spec.ts` runs the shared `defineA11ySuite` (AAA `gate`) over nine states: relay badges, purchase prompt, the file, options and review steps, retry, certify, the duplicate-blob dialog and the progress dialog. Two states have nothing to operate (the badges, and the progress dialog that only reports progress) and are named in `noKeyboard`, which skips only the keyboard pass for them. 133 tests per browser project, 665 on the five projects, all passing with the CI font. Writing it exposed two helper defects (a page reached with focus on its last control counted zero stops; Firefox's document loses focus when Tab leaves the last control and the stale `activeElement` read as a stop), both fixed in `@meddleware/frontend-config` 0.0.2 (its audit), and two real defects in `@meddleware/ui`, fixed in 0.1.38 (its audit F19 and F20): `UiBadge` never wrapped, so the relay badges pushed a phone page sideways by up to 120 px at 200% text, and the blocking progress dialog became a scrollable region with nothing the keyboard could reach.
 
+### Part B documentation pass (2026-11-26)
+
+Scope: every tracked file read against the workspace's `docs/operations/DOCUMENTATION_STANDARD.md` and annotated (Part B Phase 1, the nineteenth repository, the first of the kits); the DOCS, RFC,
+IOP and PRIV lenses applied for the first time. Before and after editing: `npm ci`, `vue-tsc`, the three linters, the 196 tests, the gallery build, `mw-audit-gate` (0 high or critical advisories),
+`npm pack --dry-run` (23 files) and the Chromium run of the real-browser sweep (133 passed). The diff is comment-only: the TypeScript compiles to identical output with comments removed, the Vue
+single-file components compile to identical render functions, and the styles, `tsconfig.json` and `.gitignore` parse alike; the YAML parses to identical values apart from the audit-gate command in
+`node-ci.yml` (F29). No defect was found in the code.
+
+### F29 — Documentation drift found by the documentation pass
+**Severity:** Low   **Disposition:** RESOLVED (2026-11-26, unreleased)
+**Where:** this audit, `CHANGELOG.md`, `README.md`, `CLAUDE.md`, `gallery/main.ts`, `src/composables/useAccessGate.ts`, `.github/audit-gate.mjs`.
+**Issue:** (1) this audit's title and header named `walrus-relay` and gave 0.1.37 as current (npm has 0.1.43, with 196 tests and two open Dependabot pull requests); (2) the changelog's title said
+`@meddleware/walrus-relay`; (3) the gallery's header pointed to `e2e/contrast.spec.ts`, which is `e2e/a11y.spec.ts`; (4) there was no `CONTRIBUTING.md`, the README's test section omitted the build and
+the audit gate, and CLAUDE.md lacked Gotchas and Related; (5) the doc comment of `useAccessGate` sat above the doc comment of `PENDING_PURCHASE_MS`, so the function itself was undocumented to tools;
+(6) `.github/audit-gate.mjs` was an un-annotated copy of the gate that `@meddleware/frontend-config` (a dev dependency) ships as `mw-audit-gate` (one of the nine copies of FU-0196); (7) about 40
+declarations and most of the test files had no doc comment, and `.gitignore`, the configurations and the workflows no header.
+**Impact:** none on the shipped code. A reader could not tell what is current, and the duplicate gate was a second place to fix.
+**Remediation / evidence:** the facts are checked against npm, the consumers' manifests and the GitHub pull requests; the documents are corrected and the doc comment moved; every declaration is
+documented and every test says what it proves; `node-ci.yml` runs `npx --no-install mw-audit-gate` and the copy is removed (`.github/audit-allowlist.json` stays; the result is the same: 0 high or
+critical advisories, 0 not allowlisted). A comment before a template's root element was avoided throughout (it would make the component a fragment in a development build).
+
 ### Delta notes (A11Y lens)
 - Gate inventory: the shared sweep (axe AA and AAA in every theme × season; reflow at 320 px; 200% text; forced colours; reduced motion; keyboard incl. focus not obscured) over the nine gallery states, five browser projects in CI. The 44 px enhanced target size and screen-reader announcements are reviewed from screenshots, not automated.
 - Known exceptions: none disabled; `noKeyboard` for two static states (above).
@@ -1067,6 +1107,52 @@ production tree is clean.
 | Price, payees, pause | the `Gate` and `PlatformConfig` on the chain | `fetchGate`, `fetchPlatformConfig` | read live (F11); not configured |
 
 ---
+
+### B.DOCS-1 Ledger state
+
+61 tracked files: 58 done (56 measured against the thresholds), 3 excluded (lockfile, licence text, generated `docs/INTEROP.md`), 0 pending, 0 `fu:` rows (2026-11-26, commit recorded in the ledger). Gate: `node scripts/check-docs.mjs --report walrus-storage-kit` gives 56 measured, 56 meeting the standard, header 100 %, declaration docs 100 %, comment ratio 0.26, no TODOs, no broken links.
+
+### B.DOCS-2 Commands run
+
+Every command in the README's Development section, CLAUDE.md's Commands section and CONTRIBUTING.md was run on 2026-11-26 and gave what the documents say: `npm ci`, `npm run type-check`,
+`npm run lint`, `npm test` (196 tests), `npm run build:gallery`, `npm run test:e2e` (Chromium: 133 passed), `npx --no-install mw-audit-gate` and `npm pack --dry-run` (23 files). The localnet suite
+(`npm run test:integration`) needs the Docker testbed and was not re-run.
+
+### B.DOCS-3 Generated documentation
+
+`docs/INTEROP.md` is generated by the workspace's `scripts/interop/gen-interop.py` from `config/interop.yaml`. `gallery-dist/` is built by `npm run build:gallery` and not tracked.
+
+### B.RFC-1 Standards inventory
+
+| Interface | Standard (and version) | Role | Where | Conformance evidence | Deviation |
+| --- | --- | --- | --- | --- | --- |
+| Relay hosts | URL syntax (RFC 3986), HTTPS | consumes | `requireHttpsHost`, `relayOrigin` (`lib/relay.ts`) | `tests/relay.test.ts` ("host validation") | plain http only for loopback (a testbed) |
+| Tip-config probe | HTTP semantics (RFC 9110), the Fetch API (WHATWG) | consumes | `fetchTipConfig`, `probeRelay` | `tests/relay.test.ts` | a timeout and a body cap on top (audit F22) |
+| Relay body | JSON (RFC 8259) | consumes | `parseTipConfig`, `readBoundedJson` | `tests/relay.test.ts` | the schedule shapes are the Walrus relay's own |
+| Wallet | the Wallet Standard | consumes through the app | `GateExecutor`, the `sign` port | the app's tests; this package never imports a wallet | — |
+| Markup and accessibility | HTML, WAI-ARIA, WCAG 2.2 AA and AAA | produces | the components | html-validate, eslint-plugin-vuejs-accessibility, the gallery sweep in five browsers | — |
+| Provenance | Sigstore / SLSA (npm provenance) | consumes | `npm-publish.yml` | `dist.attestations` on npm | — |
+
+### B.IOP-1 Export and exit drill
+
+Not applicable: the library holds no data about anyone. A host leaves it by writing its own widget against the same relay interface and the access-gate package; the contract it follows is public.
+
+### B.IOP-2 Exit register entries
+
+npm (publication), GitHub Actions (CI), Playwright's container image on mcr.microsoft.com and the DejaVu font release on GitHub (the browser jobs, checksum-pinned), and the Walrus relays the app
+passes (any compatible relay can be selected). No run-time dependency on a Meddleware service.
+
+### B.IOP-3 API stability
+
+The public API is everything exported from `src/index.ts`. Versioning is patch-only until mainnet (workspace policy), so a consumer's `^0.1.x` is an exact pin; a rename or removal is a breaking change
+and is announced in `CHANGELOG.md`.
+
+### B.PRIV-1 / B.PRIV-2 / B.PRIV-3 Privacy inventories
+
+Personal data: none held. The only thing kept in the page is a single-use consume record (the digest of the on-chain consume, keyed by network, gate and address) that `useGatedUpload` stores through
+`@meddleware/walrus-storage-client/flow`'s `browserStorage()` (the page's storage, or memory where it is blocked) so an interrupted upload never spends a second use: strictly necessary for what the
+person asked, and it belongs in the storage ledger (H2) with that package's other entry. The library sets no cookie, runs no analytics and makes no request of its own beyond the relay hosts the app passes.
+Recorded 2026-11-26.
 
 ## Section C — Test-coverage & hermetic/live split
 
@@ -1250,6 +1336,21 @@ production tree is clean.
 | TS-M8 | yes in Node CI, publish and integration (`npm ci`, audit gate with an expiring allowlist) | F17 |
 | TS-M9 | yes: `@mysten/sui` and `@mysten/walrus` are peers (0.1.27), no `legacy-peer-deps`; the package ships `.ts` source, so types come with it | F17 |
 
+**Lens baselines (DOCS, RFC, IOP, PRIV), first recorded 2026-11-26:**
+
+| ID | Holds? | Evidence |
+| --- | --- | --- |
+| DOCS-M1 | yes (all seven documents; 0BSD; CHANGELOG with an Unreleased section) | B.DOCS-1 |
+| DOCS-M2 | yes (every file's header and every declaration documented; ledger rows done) | `check-docs.mjs --report walrus-storage-kit` |
+| DOCS-M3 | yes (the root-comment rule, the hygiene test and the gate are in CLAUDE.md) | CLAUDE.md |
+| DOCS-M4 | yes (commands run, links resolve, ids exist) | B.DOCS-2 |
+| DOCS-M5 | yes (no TODO, FIXME, XXX or HACK) | `check-docs.mjs` |
+| DOCS-M6 | yes (CLAUDE.md and README verified against the code, F29; AGENTS.md points to CLAUDE.md) | this pass |
+| DOCS-M7 | yes (no secrets or private data) | inspection |
+| RFC-M1 to RFC-M7 | yes where they apply (B.RFC-1); M5 is the hosts', not a package's | B.RFC-1 |
+| IOP-M3, IOP-M5 | yes (B.IOP-3; no data, no ads, no tracking); IOP-M1, M2, M4, M6, M7: not applicable (no data, no service) | B.IOP-1 to 3 |
+| PRIV-M1 to PRIV-M8 | yes: one strictly necessary consume record, nothing else stored or requested | B.PRIV |
+
 ## Implementation suggestions (SHOULD / MAY)
 
 - **S1** SHOULD expose `singleUse` and an access mode from `useAccessGate`, so apps stop inferring
@@ -1408,6 +1509,11 @@ production tree is clean.
 - 2026-10-22 (fix wave, CI only) — **F17 RESOLVED:** the last open item, the integration workflow's unpinned sibling checkouts, is closed. `integration.yml` pins `walrus-storage-client` to `75cd12a` and `access-gate-sui` to the `v0.0.7` commit (`bf23517`), with a comment on how to bump (see F17). Proof: the workflow dispatched on `main` passed (run 39784066851); actionlint clean. No package change, no version bump. Dispositions: F17 MITIGATED to RESOLVED; Section D unchanged (the tarball/CI box already cited F17 and now names the pins); open: OQ9 is decided (2026-10-18), the `access_gate` mainnet deployment and the external review are maintainer items.
 - 2026-11-01 — frontend-wave delta review of 0.1.33–0.1.36. Read the relay, gated-upload, storage-option and upload components and the new tests; ran the audit gate, type-check, lint, 192 tests, pack contents and the five-browser gallery e2e with the CI font (350 passed, with the local ui/tokens/web-utils/wallet-adapter packs). Recorded F24 (float amount formatting, resolved by web-utils in 0.1.36), F25–F27 as Positive and fixed F28 (the gate was axe-only; now the shared sweep, 665 tests on five browsers, which also found two `ui` defects fixed in 0.1.38). Release-tool mark for 0.1.36 reworded to "released". `**Template:**` dates reconciled to the 2026-11-01 registry with no disposition change.
 - 2026-11-13 — 0.1.41 (follow-ups FU-0068 and FU-0064 item 4: people-facing wording; no disposition changes). What a person reads no longer carries a cause they cannot act on: the relay choice is "Meddleware relay" (D117); `useAccessGate`'s `termsError` and `purchaseError` are plain, actionable text ("This pass is not available right now. Try again in a moment, or contact the site.") with no gate id, RPC message or "operator", and the original error is logged once with `console.error` (a failed `purchase()` throws the same plain message with the original as its `cause`; a wallet's own error is rethrown as it came); `TipConfigBadge` for an unusable relay address and the widget's invalid-relay notice say "Uploads are unavailable right now." and log the detail (`useWalrusRelay` logs the host error once per change). `grep -rni operator` over the rendered templates finds only code identifiers (`terms.operator`, `hosts.operator`). Tests added: `AccessGateCta` mounted with a raw chain error shows only the plain text while `console.error` receives the raw one; the relay label; the badge text and its log. Measured with Node 26.13.0: type-check, lint (css, js, html), 196 unit tests, the audit gate (0 high/critical, none allowlisted) and the five-browser gallery e2e with the CI font (665 passed) pass. Not applicable: `mw-sync --check` (the package has no `meddleware` section) and the CSP check (no built site; the gallery is a test fixture).
+- 2026-11-26 — Part B documentation pass and first application of the DOCS, RFC, IOP and PRIV lenses (above, "Part B documentation pass"). Baseline before editing: `npm ci`, type-check, the three
+  linters, 196 tests, the gallery build, `mw-audit-gate`. Every tracked file annotated to the documentation standard (headers, doc comments on every declaration, a reason beside each statement group,
+  every test saying what it proves); `CONTRIBUTING.md` added; README Development section; CLAUDE.md Gotchas and Related. Found and fixed **F29** (documentation drift; the audit gate is now
+  `mw-audit-gate`, FU-0196). No defect found in the code. Re-run after editing: the same commands plus the Chromium sweep (133 passed), all passing; the diff proven comment-only apart from F29's
+  command. Verified live: npm `0.1.43` latest, consumers read from their manifests, two Dependabot pull requests open. Counts: F1 to F29.
 
 ## Pre-save consistency checklist (this pass)
 
@@ -1422,3 +1528,5 @@ production tree is clean.
 - [x] 2026-10-22 (close-out): Deployment status, OQ3 and OQ5 text and the log updated; no disposition changes.
 - 2026-10-24 — repository renamed from `walrus-relay` to `walrus-storage-kit` (workspace naming convention, `docs/architecture/ADR-0003-naming.md`): package, image, host and path names updated throughout. No finding, disposition or evidence changed.
 - 2026-10-24 — dependencies: walrus-storage-client 0.0.32 (access message v3, ADR-0004), access-gate-client 0.0.12 (access_gate v2 published-at), ui 0.1.34; 161 tests pass. No finding changed.
+- [x] 2026-11-26: Template line cites DOCS, RFC, IOP and PRIV with their registry dates; their front-matter fields, Section B subsections and MUST rows added; F29 recorded in the findings and the log;
+  the title, the deployment status and the test count are current.

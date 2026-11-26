@@ -3,6 +3,7 @@
 import { expect, type Page } from '@playwright/test'
 import { defineA11ySuite } from '@meddleware/frontend-config/a11y'
 
+/** The gallery view `v` with the upload scripted to `fail` (none, retry, certify, duplicate or hang); resolves once the page's `main` is there. */
 const view = (v: string, fail = 'none') => async (page: Page) => {
   await page.goto(`/?view=${v}&fail=${fail}`)
   await page.waitForSelector('main')
@@ -18,14 +19,18 @@ const upload = (to: 'file' | 'options' | 'review' | 'attempt', fail = 'none', sh
   await page.setInputFiles('input[type="file"]', { name: 'icon.png', mimeType: 'image/png', buffer: Buffer.from([1, 2, 3]) })
   await expect(page.getByLabel('Storage duration')).toBeVisible() // choosing a file moves the widget to its options step
   if (to === 'options') return
+  // Next: the review step, where the cost line and the hints are.
   await page.getByRole('button', { name: 'Next' }).click()
   await expect(page.getByText('Estimated cost')).toBeVisible()
   if (to === 'review') return
+  // Upload: the gallery's `performUpload` then fails, hangs or finishes as `fail` says.
   await page.getByRole('button', { name: 'Upload to Walrus' }).click()
+  // The relay-retry notice is on the options step, so go back to it.
   if (fail === 'retry') await page.getByRole('button', { name: 'Change options' }).click()
   await expect(page.getByText(shows!).first()).toBeVisible()
 }
 
+// One entry per state of the three components; each is checked in every colour mode and season, at every width and text size the shared suite covers.
 defineA11ySuite(
   {
     'relay badges': async (page) => {
@@ -34,11 +39,13 @@ defineA11ySuite(
         await expect(page.getByText(text)).toBeVisible()
       }
     },
+    // The prompt with its terms: the labels of the description list and the unreadable-terms notice are on the page.
     'purchase prompt': async (page) => {
       await view('cta')(page)
       await expect(page.getByText('Gate owner receives').first()).toBeVisible()
       await expect(page.getByText('This pass is not available right now. Try again in a moment, or contact the site.')).toBeVisible()
     },
+    // The widget's three steps, then each recovery or dialog state the scripted failures reach.
     'upload: file step': upload('file'),
     'upload: options step': upload('options'),
     'upload: review step': upload('review'),

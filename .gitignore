@@ -1,8 +1,14 @@
+# Files this repository never tracks: dependencies, build output, test output and packed tarballs.
+
 node_modules/
 dist/
+# Rust and Cloudflare Worker build directories: this repository has neither; the lines are the fleet's common ignore list.
 target/
 .wrangler/
+# The built component gallery (npm run build:gallery)
 gallery-dist/
+# Playwright's output
 test-results/
 playwright-report/
+# `npm pack` output
 *.tgz

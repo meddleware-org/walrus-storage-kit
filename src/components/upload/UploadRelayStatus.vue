@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// File: UploadRelayStatus (a fragment of notices and an optional selector). Props: `configError`, `connected`, `pending`, `relays`, `choose`; model: `host`.
+// Related: `../../composables/useWalrusRelay.ts` (the source of every prop), `../WalrusUpload.vue`.
 // The state of the upload relay, in words: a configuration error (plain words; the cause is logged by `useWalrusRelay`), the check in flight (an always-mounted live region), or a pass
 // being required. With `choose`, it also lets the user pick between relays when more than one is available.
 import { computed } from 'vue'
@@ -6,17 +8,24 @@ import { UiLiveStatus, UiNotice, UiSegmentedControl } from '@meddleware/ui'
 import type { RelayOption } from '../../composables/useWalrusRelay.js'
 
 const props = defineProps<{
+  /** Set when the relay hosts are not valid (shown in plain words; the cause is logged elsewhere). */
   configError: string | null
+  /** Whether a wallet is connected (the relay state is not reported before). */
   connected: boolean
+  /** True while the relay check (or the pass check) has not answered. */
   pending: boolean
+  /** The relays on offer; empty means none is available (a pass is required, or the check failed closed). */
   relays: RelayOption[]
   /** Offer the choice between relays (the options step); the review step only reports the state. */
   choose?: boolean
 }>()
 
+/** The selected relay host (two-way bound to the composable's selection). */
 const host = defineModel<string>('host', { required: true })
 
+/** No relay is on offer although the check is done: a pass is required. */
 const none = computed(() => props.connected && !props.pending && props.relays.length === 0)
+/** The relays as selector options. */
 const options = computed(() => props.relays.map((r) => ({ id: r.host, label: r.label })))
 </script>
 

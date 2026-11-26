@@ -1,10 +1,13 @@
 <script setup lang="ts">
+// File: UploadDuplicateDialog. Props: `existing`. Emits: `manage`, `upload-anyway`, `cancel`. Related: `../WalrusUpload.vue` (opens it when the app reports a duplicate), `@meddleware/ui` (`UiDialog`).
 // You already own this blob: offer to manage the existing copy instead of paying for a duplicate. The wording and the main action
 // follow whether the copy is certified (extend it) or still pending (certify it).
 import { UiButton, UiDialog } from '@meddleware/ui'
 import type { ExistingCopy } from '@meddleware/walrus-storage-client/flow'
 
+/** The copy the wallet already owns: certified (it has an end epoch) or still pending. */
 defineProps<{ existing: ExistingCopy }>()
+/** The three choices: manage the existing copy, upload a duplicate anyway, or cancel. */
 const emit = defineEmits<{ manage: []; 'upload-anyway': []; cancel: [] }>()
 </script>
 
@@ -23,6 +26,7 @@ const emit = defineEmits<{ manage: []; 'upload-anyway': []; cancel: [] }>()
 </template>
 
 <style scoped>
+/* Centre the three action buttons (the dialog's own default is end-aligned). */
 .wru-duplicate :deep(.mw-dialog__actions) {
   justify-content: center;
 }

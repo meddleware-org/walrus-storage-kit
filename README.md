@@ -57,14 +57,19 @@ import '@meddleware/design-tokens/tokens.css' // defines the CSS vars used here
   objects say, and `purchase` reads them again before the wallet opens: if they differ from what was
   shown, or the gate is paused, no wallet prompt opens.
 
-## Test
+## Development
 
 ```bash
-npm test          # Vitest: pure helpers, composables against a fake client, the widgets mounted
-npm run type-check
-npm run lint
-npm run test:e2e  # Playwright + axe over gallery/, every theme x season (needs Chromium)
+npm ci
+npm run type-check                # vue-tsc over the source, the tests and the gallery
+npm run lint                      # stylelint, eslint (accessibility plugin, chain boundary) and html-validate
+npm test                          # 196 offline unit tests (Vitest: pure helpers, composables against a fake client, the widgets mounted)
+npm run build:gallery             # the component gallery the browser tests drive
+npm run test:e2e                  # Playwright + axe over gallery/, every theme x season (needs Chromium)
+npx --no-install mw-audit-gate    # the dependency check CI runs
 ```
+
+The localnet suite (`npm run test:integration`) needs the Docker testbed of `walrus-storage-client` and runs nightly in `.github/workflows/integration.yml`. How to propose a change: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

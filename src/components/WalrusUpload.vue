@@ -1,4 +1,8 @@
 <script setup lang="ts">
+// File: WalrusUpload, the upload widget: a three-step wizard (file, options, upload) with relay selection, a cost estimate, the progress dialog and the recovery prompts.
+// Props: `hosts`, `connected`, `access`, `sessionKey`, `accept`, `maxBytes`, `performUpload`, `estimateStorageCost`. Emits: `uploaded`, `settled`, `manage-existing`.
+// Related: `composables/useWalrusRelay.ts` (relay choice and fee), `composables/useAccessGate.ts` (the `access` prop), `./upload/` (the parts it composes), `@meddleware/walrus-storage-client/flow`
+// (the progress, retry and duplicate conventions).
 // Generic Walrus blob-upload widget. UI + orchestration only — the heavy
 // `@mysten/walrus` client and the wallet live in the consuming app, injected via
 // `performUpload`. This keeps `@meddleware/walrus-storage-kit` free of wasm/wallet
@@ -125,7 +129,9 @@ watch(uploadEpochs, (v) => {
 
 // Estimated on-chain storage cost (WAL FROST) for the current file + duration; null while unknown.
 const storageCostFrost = ref<bigint | null>(null)
+// Each estimate takes a number; a slower, older answer never overwrites a newer one.
 let storageReqId = 0
+/** Re-estimates the storage cost for the current file size and duration (`null` when there is no file, no duration or no estimator, or the estimator failed). */
 async function refreshStorageCost(): Promise<void> {
   const size = fileSizeBytes.value
   const epochs = uploadEpochs.value
@@ -141,6 +147,7 @@ async function refreshStorageCost(): Promise<void> {
     if (id === storageReqId) storageCostFrost.value = null
   }
 }
+// Re-estimate whenever the file or the duration changes (and once at start).
 watch([fileSizeBytes, uploadEpochs], () => void refreshStorageCost(), { immediate: true })
 
 /** Combined cost line: storage in WAL (scales with epochs) + relay fee in SUI (separate tokens). */
@@ -193,6 +200,7 @@ const retryingUpload = ref(false)
 const activeStep = ref<UploadStepKey | null>(null)
 const sawAccessStep = ref(false)
 
+/** The app's `onStatus` callback: a structured step moves the stepper (and switches to the gated catalogue on `access`), a bare string is just the status line. */
 function onProgress(s: string | UploadProgress): void {
   if (isUploadProgress(s)) {
     if (s.step === 'access') sawAccessStep.value = true
@@ -263,6 +271,7 @@ watch(
 
 // A newer choice supersedes a file still being read.
 let reading = 0
+/** A file was chosen (or cleared): drop anything held for the previous file, check the size guard, read the bytes and move to the options step. */
 async function onFile(f: File | null): Promise<void> {
   const mine = ++reading
   clearHeld()
@@ -281,6 +290,10 @@ async function onFile(f: File | null): Promise<void> {
   uploadStep.value = 1
 }
 
+/**
+ * Runs the app's upload for the chosen file. `force` skips the app's duplicate pre-check. An outcome that arrives after the wallet session changed is dropped; a duplicate offers
+ * the choice dialog; a failed certify or a failed relay upload after registration keeps a retry (no second payment); anything else is shown as an error. `settled` fires either way.
+ */
 async function upload(force = false): Promise<void> {
   if (!bytes) {
     error.value = 'Choose a file first.'
@@ -472,11 +485,13 @@ async function runPendingCertify(): Promise<void> {
 </template>
 
 <style scoped>
+/* The widget is a column with the extra-small spacing step between its parts (tokens only). */
 .wru-upload {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
 }
+/* The chosen file's name beside its change link; wraps on a narrow screen. */
 .wru-file {
   display: flex;
   flex-wrap: wrap;
@@ -484,6 +499,7 @@ async function runPendingCertify(): Promise<void> {
   gap: var(--space-xs);
   margin: 0;
 }
+/* Back and next buttons at the end of the row. */
 .wru-nav {
   display: flex;
   flex-wrap: wrap;

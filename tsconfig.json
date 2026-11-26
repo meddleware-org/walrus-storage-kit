@@ -1,22 +1,31 @@
+// TypeScript settings for `vue-tsc --noEmit` (`npm run type-check`): the source, the tests and the gallery. Nothing is emitted: the package ships its source.
 {
   "compilerOptions": {
+    // The same file name with a different case is a different file on some systems; refuse the mix.
     "forceConsistentCasingInFileNames": true,
+    // The newest syntax and library: the consuming app's bundler compiles the source for its own browsers.
     "target": "ESNext",
     "module": "ESNext",
+    // Resolution as a bundler does it, so `.js` import specifiers resolve to the `.ts` files.
     "moduleResolution": "Bundler",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    // The strict family, an index access that may be undefined, and no unused locals or parameters.
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "esModuleInterop": true,
+    // Do not type-check the dependencies' declaration files.
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    // Each file must be compilable on its own (what Vite does), and type-only imports must say so.
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "jsx": "preserve",
+    // Node's types for the tests and the scripts.
     "types": ["node"],
     "noEmit": true
   },
+  // The source, the tests and the gallery (Vue files included).
   "include": ["src/**/*.ts", "src/**/*.vue", "src/**/*.d.ts", "tests/**/*.ts", "gallery/**/*.ts", "gallery/**/*.vue"]
 }

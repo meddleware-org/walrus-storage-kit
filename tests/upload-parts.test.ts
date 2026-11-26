@@ -13,13 +13,19 @@ import UploadRecovery from '../src/components/upload/UploadRecovery.vue'
 import UploadProgress from '../src/components/upload/UploadProgress.vue'
 import UploadDuplicateDialog from '../src/components/upload/UploadDuplicateDialog.vue'
 
+// Register the `toHaveNoViolations` matcher (its types are in tests/helpers/vitest-axe.d.ts).
 expect.extend(axeMatchers)
+// jsdom has no canvas: axe-core probes `getContext()` and jsdom logs "Not implemented"; answer `null` up front (the same result axe already gets) so the noise goes away without changing what is tested.
 HTMLCanvasElement.prototype.getContext = (() => null) as typeof HTMLCanvasElement.prototype.getContext
+// axe options: the `region` rule is off, because a part under test is a fragment, not a whole page.
 const opts = { rules: { region: { enabled: false } } }
 
+// jsdom has no native `<dialog>` behaviour: install the shared shim so the progress and duplicate dialogs can open.
 beforeAll(installDialogShim)
 
+// Step 1: the file input reports the chosen file (or none), describes itself by its own hint, and shows a refusal.
 describe('UploadFileStep', () => {
+  // jsdom cannot choose a file, so the input's `files` is set by hand before each `change`: first one file, then an empty list (the picker was cleared).
   it('reports the chosen file, and none when the picker is cleared', async () => {
     const w = mount(UploadFileStep, { props: { accept: 'image/*' } })
     const input = w.get('input[type="file"]')
@@ -32,6 +38,7 @@ describe('UploadFileStep', () => {
     expect(input.attributes('accept')).toBe('image/*')
   })
 
+  // Two instances on one page get two different hint ids (a hard-coded id would collide), and each input points at its own hint.
   it('describes the input by its own help text, with an id no other instance on the page shares', () => {
     const two = defineComponent({ render: () => [h(UploadFileStep, { accept: '*/*' }), h(UploadFileStep, { accept: '*/*' })] })
     const w = mount(two, { attachTo: document.body })
@@ -49,6 +56,7 @@ describe('UploadFileStep', () => {
   })
 })
 
+// The duration and permanence controls. `mountOptions` binds the two models to props, as the widget does with `v-model`.
 describe('UploadStorageOptions', () => {
   const mountOptions = (epochs = 53, permanent = true) =>
     mount(UploadStorageOptions, {
@@ -57,6 +65,7 @@ describe('UploadStorageOptions', () => {
     })
   let w: ReturnType<typeof mountOptions>
 
+  // "Max" sets the maximum and is disabled while at it; "Short" sets 10 epochs.
   it('presets set the duration, and Max is disabled at the maximum', async () => {
     w = mountOptions()
     const [max, short] = w.findAll('button')
@@ -77,6 +86,7 @@ describe('UploadStorageOptions', () => {
     w.unmount()
   })
 
+  // Clearing the number field must not set the duration to 0 (or NaN): the last value stays, so a new number can be typed.
   it('does not take an emptied field as a duration', async () => {
     w = mountOptions(20)
     await w.get('input[type="number"]').setValue('')
@@ -84,6 +94,7 @@ describe('UploadStorageOptions', () => {
     w.unmount()
   })
 
+  // Unticking the box means a deletable blob; the markup is also checked by axe.
   it('maps the checkbox to permanence', async () => {
     w = mountOptions()
     await w.get('input[type="checkbox"]').setValue(false)
@@ -93,6 +104,7 @@ describe('UploadStorageOptions', () => {
   })
 })
 
+// What the relay line says: checking, a configuration error, a pass required, and the relay choice.
 describe('UploadRelayStatus', () => {
   const relays = [
     { label: 'Meddleware relay', host: 'https://op.example', tip: null, tipStatus: 'unknown' as const, isPublic: false },
@@ -100,6 +112,7 @@ describe('UploadRelayStatus', () => {
   ]
   const base = { configError: null, connected: true, pending: false, relays, host: relays[0]!.host }
 
+  // The live region is always in the page (a region added together with its message is not announced), and its text appears and clears with the state.
   it('keeps its live region mounted and says when it is checking', async () => {
     const w = mount(UploadRelayStatus, { props: { ...base, pending: true } })
     expect(w.get('output').text()).toBe('Checking the upload relay…')
@@ -107,6 +120,7 @@ describe('UploadRelayStatus', () => {
     expect(w.get('output').text()).toBe('')
   })
 
+  // A configuration fault shows plain words only: no cause, no host, and no pass prompt.
   it('shows a configuration error and nothing else about the relay', () => {
     const w = mount(UploadRelayStatus, { props: { ...base, configError: 'host must use https', relays: [] } })
     expect(w.get('[role="alert"]').text()).toBe('Uploads are unavailable right now. Try again later, or contact the site.')
@@ -120,6 +134,7 @@ describe('UploadRelayStatus', () => {
     expect(w.find('[role="status"]').exists()).toBe(true)
   })
 
+  // The selector shows only on the options step (`choose`) and only with more than one relay; picking the second emits the new host.
   it('offers the choice only when asked to and there is more than one relay', async () => {
     expect(mount(UploadRelayStatus, { props: base }).find('fieldset').exists()).toBe(false)
     expect(mount(UploadRelayStatus, { props: { ...base, choose: true, relays: [relays[0]!] } }).find('fieldset').exists()).toBe(false)
@@ -131,6 +146,7 @@ describe('UploadRelayStatus', () => {
   })
 })
 
+// The two recovery prompts, in both states: what stopped, the button text, the disabled state while running, and one `retry` per click.
 describe('UploadRecovery', () => {
   it.each([
     ['upload', false, 'Retry upload', 'registered and paid for'],
@@ -152,9 +168,11 @@ describe('UploadRecovery', () => {
   })
 })
 
+// The progress dialog: the stepper's states, the extra access step of a gated upload, the words-only fallback and the modal behaviour.
 describe('UploadProgress', () => {
   const stepsOf = (w: ReturnType<typeof mount>) => w.findAll('li').map((li) => [li.get('.ui-stepper__label').text(), li.classes().find((c) => c.startsWith('is-'))])
 
+  // Steps before the active one are done, the active one is busy, the rest pending; the stepper says "Step 3 of 4".
   it('walks the core steps: done before the active one, in progress on it, not started after', () => {
     const w = mount(UploadProgress, { props: { open: true, step: 'upload', gated: false, status: 'Uploading to the relay…' } })
     expect(stepsOf(w)).toEqual([['Encode', 'is-done'], ['Register', 'is-done'], ['Upload', 'is-busy'], ['Certify', 'is-pending']])
@@ -174,6 +192,7 @@ describe('UploadProgress', () => {
     expect(w.text()).toContain('Preparing…')
   })
 
+  // The native dialog opens when `open` becomes true and has no close button: the person cannot dismiss an upload in progress.
   it('is a modal that is open only while uploading, and cannot be dismissed', async () => {
     const w = mount(UploadProgress, { props: { open: false, step: null, gated: false, status: '' }, attachTo: document.body })
     expect(w.get('dialog').attributes('open')).toBeUndefined()
@@ -184,6 +203,7 @@ describe('UploadProgress', () => {
   })
 })
 
+// The duplicate choice: wording and main action follow whether the existing copy is certified or pending.
 describe('UploadDuplicateDialog', () => {
   it('offers Extend for a certified copy, and the three ways out', async () => {
     const w = mount(UploadDuplicateDialog, { props: { existing: { kind: 'certified', blobId: 'b', objectId: '0x1', endEpoch: 99 } } })
@@ -203,6 +223,7 @@ describe('UploadDuplicateDialog', () => {
   })
 })
 
+// A guard on every `.vue` file: no hard-coded element ids and no colour literals, so two widgets on a page cannot collide and every colour comes from the tokens.
 describe('source hygiene', () => {
   it('has no hard-coded element ids (two widgets on one page would collide) and no colour literals', async () => {
     const { readdirSync, readFileSync } = await import('node:fs')

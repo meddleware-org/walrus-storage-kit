@@ -6,7 +6,9 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     environment: 'node',
+    // Only the localnet suites, which `npm test` excludes.
     include: ['tests/integration/**/*.integration.test.ts'],
+    // A real chain and a real relay: slow starts are normal, and the files run one after another because they share the one localnet.
     testTimeout: 60_000,
     hookTimeout: 60_000,
     fileParallelism: false,

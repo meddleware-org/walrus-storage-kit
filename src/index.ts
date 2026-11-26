@@ -5,6 +5,15 @@
 //
 // Composables are parameterized (hosts / gate config injected) so both the
 // standalone relay app and the token-issuance share one implementation.
+//
+// Role: the package's only entry (`.`). It re-exports the three components (`WalrusUpload`, `TipConfigBadge`, `AccessGateCta`), the composables that hold their
+// logic, the pure relay helpers and the gate pinning. The package ships TypeScript source and Vue single-file components: the consuming app's bundler compiles them,
+// and `package.json` declares `*.css` and `*.vue` as side-effectful so tree-shaking keeps the styles.
+//
+// Main exports: `WalrusUpload`, `TipConfigBadge`, `AccessGateCta`, `useWalrusRelay`, `useAccessGate`, `useGatedUpload`, `relayGateConfig`, `assertPinnedGate`, the `lib/relay.js`
+// helpers and the step catalogue.
+//
+// Related: `CLAUDE.md` (the invariants: no on-chain logic here, no `@mysten/walrus` import, no wallet dependency), `@meddleware/walrus-storage-client` (the flow it builds on).
 
 export { default as WalrusUpload } from './components/WalrusUpload.vue'
 export { default as TipConfigBadge } from './components/TipConfigBadge.vue'

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// File: TipConfigBadge, a small status badge for one upload relay. Role: presentational; it asks `probeRelay` (a pure helper) for the relay's reachability and tip and draws a `UiBadge`.
+// No wallet, no `@mysten/walrus`. Props: `host`. Related: `lib/relay.ts` (`probeRelay`, `formatCoinExact`), `WalrusUpload.vue` (shows one per relay).
 // Reads a relay's `/v1/tip-config` and shows the current per-upload tip + reachability.
 // Purely presentational; uses the pure `probeRelay` helper (no wallet, no @mysten/walrus).
 import { computed, ref, onMounted, watch } from 'vue'
@@ -10,13 +12,18 @@ const props = defineProps<{
   host: string
 }>()
 
+/** True while a probe is in flight. */
 const loading = ref(true)
+/** Whether the relay answered. */
 const accessible = ref(false)
 /** Set when `host` is not a usable relay URL: a configuration error, not an outage. */
 const invalid = ref(false)
+/** The tip the relay reported (a figure, its kind, and whether it could be read). */
 const health = ref<Pick<RelayHealth, 'tip' | 'tipStatus' | 'tipKind'>>({ tip: null, tipStatus: 'unknown', tipKind: null })
+// Each refresh takes a number; a slow answer for an earlier host (or an earlier call) is discarded when a newer one has started.
 let generation = 0
 
+/** Probes the current host and updates the badge's state; safe to call while an earlier probe is still running. */
 async function refresh(): Promise<void> {
   const mine = ++generation
   loading.value = true
@@ -38,6 +45,7 @@ async function refresh(): Promise<void> {
   }
 }
 
+// Probe when the badge appears, and again whenever the host changes.
 onMounted(refresh)
 watch(() => props.host, refresh)
 
@@ -58,6 +66,10 @@ const tone = computed<BadgeTone>(() => {
   if (invalid.value || !accessible.value) return 'danger'
   return health.value.tipStatus === 'unknown' || health.value.tipStatus === 'over-ceiling' ? 'warn' : 'ok'
 })
+/**
+ * The badge's state as a data attribute, for tests and styling hooks: loading, invalid, up or down. (The template is one `UiBadge`: its tone follows this state and its text says
+ * what is wrong in plain words. There is deliberately no HTML comment before it: a comment next to the root element would make the component a fragment in a development build.)
+ */
 const state = computed(() => (loading.value ? 'loading' : invalid.value ? 'invalid' : accessible.value ? 'up' : 'down'))
 </script>
 

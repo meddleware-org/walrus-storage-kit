@@ -102,7 +102,19 @@ src/components/AccessGateCta.vue    "Purchase access" CTA for gated relays
 ```bash
 npm run type-check && npm run lint && npm test
 npm run test:e2e   # real-browser axe contrast gate over gallery/, every theme x season (needs Chromium)
+npx --no-install mw-audit-gate    # the dependency gate CI runs (the copy that lived in .github/ is gone: FU-0196)
 ```
+
+Release: bump `version`, push, tag `v<version>`; `npm-publish.yml` re-runs the whole Node CI on the tagged commit and publishes with npm trusted publishing.
+Commit messages: one short line, no body, no trailer.
+
+## Gotchas
+
+- **No HTML comment before a template's root element.** A comment next to the root makes the component a fragment in a development build, so `class` and other attributes passed by the parent no longer fall through (only there: production strips comments). Put such notes in the `<script>` header; comments inside the root element are fine.
+- **A single-file component may not contain a hard-coded element id or a colour literal, even in a comment**: `tests/upload-parts.test.ts` ("source hygiene") greps every `.vue` file for `id="…"` and for `#` followed by hex digits.
+- **The gallery is not published** (`files` ships `src` only); it exists for the real-browser run and the screenshots, and its fetch fixtures are in `gallery/main.ts`.
+- **Three version numbers are not here**: this package ships source, so there is no build and the version in `package.json` is the only one; the peer ranges (`@meddleware/ui`, `@mysten/sui`, `@mysten/walrus`) say what the consuming app must provide.
+- **Do not add `@meddleware/frontend-config` copies of its scripts.** The audit gate is `mw-audit-gate` from the dev dependency; `.github/audit-allowlist.json` (currently empty) is the only local part.
 
 ## Injection pattern for relay hosts
 
@@ -169,6 +181,11 @@ inlineMeddleware` from `@meddleware/frontend-config/vitest`) and a test that ope
 - Do not import `@mysten/walrus` — the Walrus client is app-injected via `performUpload`.
 - Do not add wallet-standard imports — stay wallet-agnostic.
 - Do not add a build step — the package ships source for consumers to bundle.
+
+## Related
+
+- The audit: [`docs/audit/walrus-storage-kit-audit.md`](docs/audit/walrus-storage-kit-audit.md); how to propose a change: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- Consumers: `walrus-storage-ui` (the standalone uploader) and `token-issuance-ui` (icon upload). Its dependencies: `walrus-storage-client`, `access-gate-client`, `web-utils`; peers `ui` and `design-tokens`.
 
 ## Interoperability
 

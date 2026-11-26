@@ -1,3 +1,7 @@
+// File: the step catalogue of a blob upload (pure TypeScript, no Vue). Role: the one list the app (which reports progress) and `WalrusUpload` (which draws the stepper)
+// share, so a step cannot be named differently in the two. Main exports: `CORE_UPLOAD_STEPS`, `GATED_UPLOAD_STEPS`, `isUploadProgress`. Related: `@meddleware/walrus-storage-client/flow`
+// (`UploadProgress`, `UploadStepKey` are defined there), `components/upload/UploadProgress.vue`.
+//
 // Canonical, ordered step catalogue for a Walrus blob upload, shared by the app (which drives
 // progress) and the `WalrusUpload` widget (which renders a stepper). Pure module — no Vue.
 //
@@ -8,6 +12,7 @@
 
 import type { UploadProgress, UploadStepKey } from '@meddleware/walrus-storage-client/flow'
 
+/** One step of the stepper: which step it is, what it is called, and whether it needs the wallet. */
 export interface UploadStepDef {
   key: UploadStepKey
   /** Short label under the stepper node. */

@@ -1,6 +1,9 @@
 // Builds the relay access for one upload from the NFT-gate state. The gated operator relay needs proof of an access pass; this is
 // the one place that decides whether an upload needs it and wires the pass, the wallet and the persisted consume together, so an
 // app's `performUpload` no longer repeats it.
+// File: `useGatedUpload`, the decision and wiring of the gated relay access for one upload. Role: it holds no state of its own; it reads the NFT-gate state (`useAccessGate`) and
+// hands the wallet, the persisted consume and the signer to `createGatedAccess` in `@meddleware/walrus-storage-client/flow`. Related: `useAccessGate.ts` (the state),
+// `lib/relay.ts` (`relayOrigin`), the app's `performUpload`, which calls `accessFor`.
 import { browserStorage, consumeStorageKey, createGatedAccess } from '@meddleware/walrus-storage-client/flow'
 import type { GatedAccess, GatedAccessPorts, UploadProgress } from '@meddleware/walrus-storage-client/flow'
 import { normalizeSuiAddress } from '@mysten/sui/utils'
@@ -15,6 +18,7 @@ export type AccessGateState = Pick<
   'gate' | 'hasAccess' | 'nftId' | 'singleUse' | 'buildConsume'
 >
 
+/** Everything `accessFor` needs to build the access for one upload. */
 export interface GatedAccessInput {
   /** The relay the upload goes through. */
   relayHost: string
@@ -44,13 +48,17 @@ export interface GatedAccessInput {
  * burns a use; a fresh use is spent only after the gateway reports the stored one redeemed.
  */
 export function useGatedUpload(gate: AccessGateState | (() => AccessGateState)) {
+  // The gate state may change with the network, so it can be given as a getter and is read afresh on every call.
   const state = (): AccessGateState => (typeof gate === 'function' ? gate() : gate)
 
+  /** The relay access for this upload, or `undefined` when the upload needs none (see the function's description). */
   function accessFor(input: GatedAccessInput): GatedAccess | undefined {
     const s = state()
     const config = s.gate
     const nftId = s.nftId.value
+    // No gate configured, no pass held (or not yet known), or no pass object to spend: the upload is not gated.
     if (!config || s.hasAccess.value !== true || !nftId) return undefined
+    // The public fallback relay never checks a pass, so an upload through it must not spend one.
     if (input.publicHost !== undefined && relayOrigin(input.relayHost) === relayOrigin(input.publicHost)) return undefined
     return createGatedAccess<Transaction>({
       storage: input.storage ?? browserStorage(),

@@ -5,15 +5,18 @@ import { ref } from 'vue'
 import * as flow from '@meddleware/walrus-storage-client/flow'
 import { useGatedUpload, type AccessGateState, type GatedAccessInput } from '../src/composables/useGatedUpload.js'
 
+// Keep the real flow helpers but replace `createGatedAccess` with a spy that returns a marker, so each test can read exactly what was handed to it.
 vi.mock('@meddleware/walrus-storage-client/flow', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@meddleware/walrus-storage-client/flow')>()),
   createGatedAccess: vi.fn(() => ({ marker: 'access' })),
 }))
 
+// Fixed ids: the gate, the held pass, and a minimal gate config.
 const GATE_ID = `0x${'a1'.repeat(32)}`
 const NFT = `0x${'b2'.repeat(32)}`
 const config = { packageId: '0x1', platformConfigId: '0x2', nftType: '0x1::m::T', gateId: GATE_ID, soulbound: true }
 
+/** state(over): the gate state `useAccessGate` would give (gate config, whether a pass is held, the pass object id, whether it is single-use), with the given parts overridden; also returns the `buildConsume` spy. */
 function state(over: Partial<{ gate: typeof config | null; hasAccess: boolean | null; nftId: string | null; singleUse: boolean }> = {}) {
   const buildConsume = vi.fn(() => 'tx')
   const s = {
@@ -26,7 +29,9 @@ function state(over: Partial<{ gate: typeof config | null; hasAccess: boolean | 
   return { s: s as unknown as AccessGateState, buildConsume }
 }
 
+// A wallet executor that signs, "executes" and "finalises" instantly.
 const executor = { signAndExecute: vi.fn(async () => ({ digest: 'D' })), waitForTransaction: vi.fn(async () => ({})) }
+/** input(over): a valid input for one upload through the operator relay, with the given parts overridden (storage is an in-memory stub). */
 const input = (over: Partial<GatedAccessInput> = {}): GatedAccessInput => ({
   relayHost: 'https://operator.example',
   publicHost: 'https://public.example',
@@ -38,9 +43,12 @@ const input = (over: Partial<GatedAccessInput> = {}): GatedAccessInput => ({
   ...over,
 })
 
+// Forget the calls of the previous test.
 beforeEach(() => vi.mocked(flow.createGatedAccess).mockClear())
 
+// `accessFor` decides whether an upload needs relay access and builds it from the gate state, the wallet and the persisted-consume key.
 describe('useGatedUpload.accessFor', () => {
+  // A held pass and an operator relay: the flow is given the storage key (network, gate, address), the relay, the account, the gate id, the pass and whether it is single-use.
   it('returns access for the operator relay when the wallet holds a pass', () => {
     const { accessFor } = useGatedUpload(state().s)
     expect(accessFor(input())).toEqual({ marker: 'access' })
@@ -56,6 +64,7 @@ describe('useGatedUpload.accessFor', () => {
     })
   })
 
+  // None of these four situations needs a pass, so no access is built and the flow is never called.
   it.each([
     ['no gate is configured', { gate: null }],
     ['access is unknown', { hasAccess: null }],
@@ -66,6 +75,7 @@ describe('useGatedUpload.accessFor', () => {
     expect(flow.createGatedAccess).not.toHaveBeenCalled()
   })
 
+  // The public relay is compared by origin, so different spellings of its address (case, trailing slash) are still the public relay, which never spends a use.
   it('never gates an upload through the public relay, however its address is written', () => {
     const { accessFor } = useGatedUpload(state().s)
     expect(accessFor(input({ relayHost: 'https://public.example' }))).toBeUndefined()
@@ -73,6 +83,7 @@ describe('useGatedUpload.accessFor', () => {
     expect(flow.createGatedAccess).not.toHaveBeenCalled()
   })
 
+  // The state can be a getter that changes with the network: it is read afresh on every call, not once.
   it('reads the state at call time when given a getter (the network can change)', () => {
     const open = state({ gate: null })
     const gated = state()
@@ -83,6 +94,7 @@ describe('useGatedUpload.accessFor', () => {
     expect(accessFor(input())).toBeDefined()
   })
 
+  // The ports given to the flow call back into the gate state (`buildConsume`) and the wallet executor (`signAndExecute`, `waitForTransaction`).
   it('builds the consume through the gate state and runs it through the wallet executor', async () => {
     const { s, buildConsume } = state()
     useGatedUpload(s).accessFor(input())

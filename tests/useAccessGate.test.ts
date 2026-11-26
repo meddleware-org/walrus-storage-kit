@@ -1,8 +1,12 @@
+// Unit tests for `useAccessGate`: ownership checks, pass selection, the purchase terms read from the chain, the purchase itself and wallet switching. The Sui client is a fake chain
+// that renders the gate and `PlatformConfig` as a full node does; the wallet is a stub executor. The finding ids (F10, F11) are this repository's audit findings.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { accessGateDeployment } from '@meddleware/access-gate-client/deployments'
 
+// Scripted ownership: each test queues the passes the wallet "holds" (`fetchAccessNfts`) and can read the purchase transaction that was built (`buildPurchaseTx`).
 const fetchAccessNfts = vi.fn()
 const buildPurchaseTx = vi.fn()
+// Replace only the ownership read and watch the purchase builder; the gate and `PlatformConfig` reads go through the real parsers, against a fake chain, so the terms logic is exercised for real.
 vi.mock('@meddleware/access-gate-client', async (importActual) => {
   const actual = await importActual<typeof import('@meddleware/access-gate-client')>()
   return {
@@ -25,6 +29,7 @@ import {
 } from '../src/composables/useAccessGate'
 import { relayGateConfig } from '../src/constants'
 
+// The published deployment, and fixed ids: the gate, its operator (payment recipient) and the platform treasury.
 const D = accessGateDeployment('testnet')
 const GATE_ID = `0x${'a1'.repeat(32)}`
 const OPERATOR = `0x${'0b'.repeat(32)}`
@@ -76,6 +81,7 @@ function fakeChain() {
   return { chain, client, getObject }
 }
 
+/** setup(over): a fake chain, a client that returns it, and a `useAccessGate` on testnet (the default gate, or the one given, `null` for an ungated relay). */
 function setup(over: { gate?: RelayGateConfig | null } = {}) {
   const fake = fakeChain()
   const getClient = vi.fn<(network: 'testnet' | 'mainnet') => GateClient>(() => fake.client)
@@ -83,12 +89,14 @@ function setup(over: { gate?: RelayGateConfig | null } = {}) {
   return { ...fake, getClient, g }
 }
 
+/** deferred<T>(): a promise a test resolves by hand, to control when an in-flight call finishes. */
 function deferred<T>() {
   let resolve!: (v: T) => void
   const promise = new Promise<T>((r) => (resolve = r))
   return { promise, resolve }
 }
 
+// executor(): a wallet executor that "signs" and "executes" a purchase as transaction `BUY1` and finalises it instantly.
 const executor = () => ({
   signAndExecute: vi.fn(async () => ({ digest: 'BUY1' })),
   waitForTransaction: vi.fn(async () => undefined),
@@ -97,6 +105,7 @@ const executor = () => ({
 /** `console.error` is where the cause of a failure goes; a test reads it instead of printing it. */
 let consoleError: MockInstance<typeof console.error>
 
+// Reset the scripted calls and silence `console.error`, where the cause of a failure goes (a test reads it instead of printing it).
 beforeEach(() => {
   fetchAccessNfts.mockReset()
   buildPurchaseTx.mockReset()
@@ -105,7 +114,9 @@ beforeEach(() => {
 
 afterEach(() => consoleError.mockRestore())
 
+// Audit F10: every transaction this composable builds targets the published deployment, so a config that names anything else is refused up front.
 describe('useAccessGate pinning to the published deployment (F10)', () => {
+  // A config with a foreign package or a foreign `PlatformConfig` throws at construction, before any read or transaction.
   it('refuses a hand-built config that names another package or PlatformConfig', () => {
     const getClient = () => fakeChain().client
     expect(() => useAccessGate({ network: 'testnet', gate: { ...gate, packageId: '0xdead' }, getClient })).toThrow(/package/)
@@ -117,6 +128,7 @@ describe('useAccessGate pinning to the published deployment (F10)', () => {
     ).toThrow(/NFT type/)
   })
 
+  // Mainnet has no deployment yet: a gated relay there is refused, while an ungated one (no gate at all) needs no deployment.
   it('refuses a gate on a network with no recorded deployment, but an ungated relay needs none', () => {
     const getClient = () => fakeChain().client
     expect(() => useAccessGate({ network: 'mainnet', gate, getClient })).toThrow(/no access_gate deployment/)
@@ -125,6 +137,7 @@ describe('useAccessGate pinning to the published deployment (F10)', () => {
     expect(open.hasAccess.value).toBe(true)
   })
 
+  // The host's client factory is asked for the network the gate is on, so the reads cannot go to another chain.
   it('passes the network to getClient', async () => {
     const { g, getClient } = setup()
     fetchAccessNfts.mockResolvedValueOnce([{ objectId: '0xnft', gateId: GATE_ID, variant: { kind: 'unlimited' } }])
@@ -133,7 +146,9 @@ describe('useAccessGate pinning to the published deployment (F10)', () => {
   })
 })
 
+// State belongs to a wallet: a reset clears it, and a result that arrives after the wallet changed is discarded (the generation counters).
 describe('useAccessGate wallet switching', () => {
+  // After a disconnect or account switch nothing about the previous wallet survives: access, uses, the pass and the terms.
   it('reset() clears access, uses, the held NFT and the terms', async () => {
     const { g } = setup()
     fetchAccessNfts.mockResolvedValueOnce([{ objectId: '0xnft', gateId: GATE_ID, variant: { kind: 'singleUse', remaining: 3n } }])
@@ -149,6 +164,7 @@ describe('useAccessGate wallet switching', () => {
     expect(g.terms.value).toBeNull()
   })
 
+  // A slow check for the previous wallet resolves after a reset and must not grant access to the new one (the generation counter).
   it('discards an ownership result that arrives after the wallet changed', async () => {
     const { g } = setup()
     const slow = deferred<unknown[]>()
@@ -161,6 +177,7 @@ describe('useAccessGate wallet switching', () => {
     expect(g.nftId.value).toBeNull()
   })
 
+  // The same rule for the terms: an answer that arrives after a reset is dropped.
   it('discards terms that arrive after a reset', async () => {
     const { g, getObject } = setup()
     const slow = deferred<unknown>()
@@ -173,7 +190,9 @@ describe('useAccessGate wallet switching', () => {
   })
 })
 
+// Audit F11: the price, the recipients and the fee are read from the chain, shown before the wallet opens, and only ever shown in plain words.
 describe('useAccessGate purchase terms (F11)', () => {
+  // The terms equal what the fake chain holds (price, the operator's and the platform's shares and addresses): nothing comes from configuration.
   it('reads the price, recipients and fee from the chain, not from configuration', async () => {
     const { g } = setup()
     const t = await g.loadTerms()
@@ -193,6 +212,7 @@ describe('useAccessGate purchase terms (F11)', () => {
     expect(g.termsError.value).toBeNull()
   })
 
+  // The platform's share follows the contract's rule (the larger of the percentage and the floor, capped), and a frozen gate's snapshot wins when there is one.
   it('uses the minimum fee when it exceeds the percentage, and the frozen-gate snapshot when there is one', async () => {
     const { g, chain } = setup()
     chain.platform.min_commission_mist = '50000'
@@ -201,6 +221,7 @@ describe('useAccessGate purchase terms (F11)', () => {
     expect((await g.loadTerms())!.platform.mist).toBe(100_000n)
   })
 
+  // Terms are read as soon as a purchase prompt will be needed (no pass), and not at all for a wallet that already holds one.
   it('reads the terms when the check finds no pass, but not when the wallet already holds one', async () => {
     const none = setup()
     fetchAccessNfts.mockResolvedValueOnce([])
@@ -214,6 +235,7 @@ describe('useAccessGate purchase terms (F11)', () => {
     expect(has.getObject).not.toHaveBeenCalled()
   })
 
+  // A failed read leaves `terms` empty and sets `termsError` to the fixed plain sentence; the cause is logged.
   it('reports why the terms cannot be read', async () => {
     const { g, chain } = setup()
     chain.fail = new Error('rpc down')
@@ -225,6 +247,7 @@ describe('useAccessGate purchase terms (F11)', () => {
     expect(consoleError.mock.calls[0]![1]).toBe(chain.fail)
   })
 
+  // `termsError` contains no gate id, host or chain detail: the person can act on it, and the developer has the console.
   it('says only plain words, with no gate id or chain detail, in termsError', async () => {
     const { g, chain } = setup()
     chain.fail = new Error('rpc down')
@@ -232,6 +255,7 @@ describe('useAccessGate purchase terms (F11)', () => {
     expect(g.termsError.value).not.toMatch(/rpc|0x|chain|gate|operator/i)
   })
 
+  // An object that is not a `Gate` of the published package (another type at that id) is refused, not trusted.
   it('refuses a configured gate that is not a Gate of the published package', async () => {
     const { g, chain } = setup()
     chain.gateType = '0xdead::access_gate::Gate'
@@ -240,6 +264,7 @@ describe('useAccessGate purchase terms (F11)', () => {
     expect(String(consoleError.mock.calls[0]![1])).toContain(`Gate ${GATE_ID} was not found on testnet`)
   })
 
+  // A config that says transferable for a soulbound gate (or the reverse) is refused: buyers must be told the truth about the pass.
   it('refuses a configured pass kind that disagrees with the gate', async () => {
     const { g, chain } = setup()
     chain.gate.soulbound = false
@@ -248,6 +273,7 @@ describe('useAccessGate purchase terms (F11)', () => {
     expect(String(consoleError.mock.calls[0]![1])).toMatch(/pass kind/)
   })
 
+  // With no gate there is nothing to read: no client call is made.
   it('does not read anything for an ungated relay', async () => {
     const { g, getObject } = setup({ gate: null })
     expect(await g.loadTerms()).toBeNull()
@@ -255,7 +281,9 @@ describe('useAccessGate purchase terms (F11)', () => {
   })
 })
 
+// The purchase: the wallet opens only for terms the person has seen; the purchase is built from the freshly read price; aborts are reported in words; a slow index never costs a second pass.
 describe('useAccessGate purchase', () => {
+  // With no terms shown the purchase reads them, publishes them and throws: the executor is never called.
   it('never opens the wallet for terms the user has not seen', async () => {
     const { g } = setup()
     fetchAccessNfts.mockResolvedValue([])
@@ -267,6 +295,7 @@ describe('useAccessGate purchase', () => {
     expect(g.purchaseError.value).toMatch(/terms have changed/)
   })
 
+  // The transaction is built for the price just read from the chain, after it equalled the terms the person saw.
   it('builds the purchase from the on-chain price and the shown terms', async () => {
     const { g } = setup()
     fetchAccessNfts.mockResolvedValueOnce([]).mockResolvedValue([{ objectId: '0xnft', gateId: GATE_ID, variant: { kind: 'unlimited' } }])
@@ -280,6 +309,7 @@ describe('useAccessGate purchase', () => {
     expect(g.purchaseError.value).toBeNull()
   })
 
+  // If the price moved between the prompt and the click, the new terms are shown and the purchase stops: the wallet never opens at a price the person did not see.
   it('stops, and shows the new terms, when the price changed after the terms were shown', async () => {
     const { g, chain } = setup()
     await g.loadTerms()
@@ -294,6 +324,7 @@ describe('useAccessGate purchase', () => {
     expect(buildPurchaseTx).toHaveBeenCalledWith(gate, 20_000_000n)
   })
 
+  // The same stop for a changed recipient or platform fee, not only the price.
   it('stops when the recipient or the fee changed, not only the price', async () => {
     const { g, chain } = setup()
     await g.loadTerms()
@@ -304,6 +335,7 @@ describe('useAccessGate purchase', () => {
     await expect(g.purchase(executor(), '0xalice')).rejects.toThrow(/terms have changed/)
   })
 
+  // A paused gate cannot be bought from: the person is told, and no prompt opens.
   it('refuses a paused gate before any wallet prompt', async () => {
     const { g, chain } = setup()
     await g.loadTerms()
@@ -315,6 +347,7 @@ describe('useAccessGate purchase', () => {
     expect(g.terms.value?.paused).toBe(true)
   })
 
+  // If the price cannot be read right before signing the purchase stops with the plain sentence (the cause is the console's).
   it('refuses when the price cannot be read, without a wallet prompt', async () => {
     const { g, chain } = setup()
     await g.loadTerms()
@@ -330,6 +363,7 @@ describe('useAccessGate purchase', () => {
     expect(logged.cause).toBe(chain.fail)
   })
 
+  // An abort of the access-gate package (for example an insufficient payment) is translated to a sentence; any other error is passed on unchanged.
   it('reports an access_gate abort in words and leaves other errors alone', async () => {
     const { g } = setup()
     await g.loadTerms()
@@ -348,6 +382,7 @@ describe('useAccessGate purchase', () => {
     expect(consoleError).toHaveBeenLastCalledWith(expect.any(String), rejected)
   })
 
+  // An abort code from a different package that happens to share a number is not read as an access-gate abort.
   it('does not claim an abort from another package', async () => {
     const { g } = setup()
     await g.loadTerms()
@@ -356,6 +391,7 @@ describe('useAccessGate purchase', () => {
     await expect(g.purchase(aborting, '0xalice')).rejects.toBe(foreign)
   })
 
+  // After a purchase executes but before the pass is visible, another call only re-checks ownership; it buys again only after `PENDING_PURCHASE_MS`.
   it('never buys a second pass while the first is still being indexed', async () => {
     vi.useFakeTimers()
     try {
@@ -386,6 +422,7 @@ describe('useAccessGate purchase', () => {
     }
   })
 
+  // Sui's owned-object index can lag finality: the check is retried a few times, and the wait error is surfaced only if the pass never appears.
   it('retries the ownership check while the index catches up, and surfaces the wait error only if it never does', async () => {
     vi.useFakeTimers()
     try {
@@ -414,6 +451,7 @@ describe('useAccessGate purchase', () => {
     }
   })
 
+  // A pending purchase belongs to the wallet that made it: after a switch it no longer blocks buying.
   it('a wallet switch clears a pending purchase', async () => {
     vi.useFakeTimers()
     try {
@@ -430,15 +468,18 @@ describe('useAccessGate purchase', () => {
     }
   })
 
+  // `purchase` on a relay with no gate throws: there is nothing to buy.
   it('refuses to purchase on an ungated relay', async () => {
     const { g } = setup({ gate: null })
     await expect(g.purchase(executor(), '0xalice')).rejects.toThrow(/No access gate configured/)
   })
 })
 
+// Which pass counts and which is used first: usable passes only, the most-depleted single-use pass first, unlimited last.
 describe('useAccessGate pass selection', () => {
   const nft = (id: string, variant: unknown) => ({ objectId: id, gateId: GATE_ID, variant })
 
+  // A spent single-use pass is a receipt, not access; of the usable ones the most-depleted is used first (fewer stranded uses), and unlimited passes last.
   it('ignores exhausted receipts, consumes the most-depleted single-use pass first and keeps unlimited last', async () => {
     const { g } = setup()
     fetchAccessNfts.mockResolvedValueOnce([
@@ -453,6 +494,7 @@ describe('useAccessGate pass selection', () => {
     expect(g.singleUse.value).toBe(true)
   })
 
+  // Only exhausted passes means no access; holding an unlimited pass means access without spending a use.
   it('has no access with only exhausted passes, and an unlimited pass only signs', async () => {
     const { g } = setup()
     fetchAccessNfts.mockResolvedValueOnce([nft('0xspent', { kind: 'singleUse', remaining: 0n })])
@@ -465,6 +507,7 @@ describe('useAccessGate pass selection', () => {
     expect(g.usesRemaining.value).toBeNull()
   })
 
+  // If the check itself fails the person has no access, but the purchase path stays available (the gateway re-verifies on the server anyway).
   it('fails closed on a failed ownership check but keeps the purchase path', async () => {
     const { g } = setup()
     fetchAccessNfts.mockRejectedValueOnce(new Error('rpc down'))

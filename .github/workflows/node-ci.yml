@@ -1,3 +1,6 @@
+# Node CI for the Walrus kit: install, dependency audit, type-check, three linters, the unit tests, the build and a check of the tarball's contents, on Node 26; the
+# real-browser accessibility run (Playwright and axe, every theme and season) in all five browsers, one job each; and the unit tests again on Node 24, the minimum in `engines`.
+# It runs on every push to main and every pull request, and the release workflow (npm-publish.yml) calls it on the tagged commit.
 name: Node CI
 
 on:
@@ -7,9 +10,11 @@ on:
   # The release workflow (npm-publish.yml) calls this workflow as its `verify` job, so a tag runs exactly these checks.
   workflow_call:
 
+# Read-only: CI needs nothing but the checkout.
 permissions:
   contents: read
 
+# No tool may phone home from CI (the fleet's privacy rule; npm, Node and other tools honour it).
 env:
   DO_NOT_TRACK: "1"
 
@@ -18,30 +23,40 @@ jobs:
     name: Type-check & test
     runs-on: ubuntu-latest
     steps:
+      # Actions are pinned by full commit SHA with the version in a comment (D12).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Node 26 is the fleet baseline (D56).
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '26'
 
+      # `npm ci` installs exactly the lockfile, so CI tests what was reviewed.
       - name: Install dependencies
         run: npm ci
 
+      # High and critical advisories fail the build, minus the entries of .github/audit-allowlist.json (each with a reason and an expiry date). The gate is
+      # `mw-audit-gate`, published by @meddleware/frontend-config (a dev dependency), not a copy in this repository (FU-0196).
       - name: Audit dependencies
-        run: node .github/audit-gate.mjs
+        run: npx --no-install mw-audit-gate
 
+      # vue-tsc over the source, the tests and the gallery.
       - name: Type-check
         run: npm run type-check
 
+      # Design tokens only, no hex colours, accessibility and browser-support rules in the styles.
       - name: Lint CSS (stylelint)
         run: npm run lint:css
 
+      # The shared Vue rules, the accessibility plugin and the chain boundary (no on-chain logic in this library).
       - name: Lint JS (eslint + vuejs-a11y)
         run: npm run lint:js
 
+      # html-validate on every template.
       - name: Lint HTML (html-validate)
         run: npm run lint:html
 
+      # The offline unit tests (the localnet suite is a separate, opt-in workflow: integration.yml).
       - name: Test
         run: npm test
 
@@ -70,6 +85,7 @@ jobs:
       - id: v
         run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
 
+  # The gallery in real browsers: axe on every theme and season (jsdom cannot compute layout or colours, so the contrast rules only run here).
   e2e:
     name: Real-browser accessibility (Playwright + axe, theme × season) (${{ matrix.project }})
     needs: playwright
@@ -119,6 +135,7 @@ jobs:
         env:
           E2E_BROWSERS: all
 
+  # The package declares `engines: node >=24`; this proves the claim by running the tests on that version.
   node24-compat:
     name: Node 24 compatibility (engines >=24)
     runs-on: ubuntu-latest

@@ -5,6 +5,8 @@ import 'vitest'
 import type { AxeMatchers } from 'vitest-axe'
 
 declare module 'vitest' {
+  /** `expect(...)` gains `toHaveNoViolations` (R and T are vitest's own type parameters, unused here). */
   interface Assertion<R, T> extends AxeMatchers {}
+  /** The same matcher inside asymmetric matchers such as `expect.objectContaining`. */
   interface AsymmetricMatchersContaining extends AxeMatchers {}
 }

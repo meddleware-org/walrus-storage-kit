@@ -8,8 +8,10 @@ import { MAX_TIP_MIST } from '../src/lib/relay.js'
 import { TERMS_UNAVAILABLE_MESSAGE, useAccessGate, type GateClient, type PurchaseTerms } from '../src/composables/useAccessGate'
 import { relayGateConfig } from '../src/constants'
 
+// Every test stubs the global `fetch`; put the real one back after each, so no test sees another's relay.
 afterEach(() => vi.unstubAllGlobals())
 
+/** relay(answer): make every `fetch` answer as a relay would: a body (JSON), a bare HTTP status (a number), or a network failure (an Error). */
 function relay(answer: unknown | number | Error) {
   vi.stubGlobal(
     'fetch',
@@ -23,13 +25,16 @@ function relay(answer: unknown | number | Error) {
 /** The badge's words: its text without the decorative symbol (which is hidden from assistive technology). */
 const words = (w: ReturnType<typeof mount>) => w.text().replace(w.find('.mw-badge__symbol').exists() ? w.get('.mw-badge__symbol').text() : '', '')
 
+/** badge(host): mount the badge for a relay host and wait for its probe to settle. */
 async function badge(host = 'https://relay.example') {
   const w = mount(TipConfigBadge, { props: { host } })
   await flushPromises()
   return w
 }
 
+// The relay badge. Audit F9: an unknown tip must never read as a free relay, and a bad address must read as a fault, not an outage.
 describe('TipConfigBadge (F9)', () => {
+  // The first state: nothing is known yet, and the neutral "checking" text and state show.
   it('shows "Checking relay…" while the probe is in flight', async () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
     const w = mount(TipConfigBadge, { props: { host: 'https://relay.example' } })
@@ -38,6 +43,7 @@ describe('TipConfigBadge (F9)', () => {
     expect(w.attributes('data-state')).toBe('loading')
   })
 
+  // A constant tip shows its exact figure; a linear schedule shows its base as "from …", because the size-dependent part is not known here.
   it('shows a figure for a known tip, and "from" for a linear schedule', async () => {
     relay({ send_tip: { kind: { const: 100_000 } } })
     expect(words(await badge())).toBe('Relay online · tip 0.0001 SUI')
@@ -67,6 +73,7 @@ describe('TipConfigBadge (F9)', () => {
     expect(w.attributes('data-tip')).toBe('unknown')
   })
 
+  // The state is carried by a symbol hidden from assistive technology and by a tone class, so colour is never the only signal.
   it('marks the state with a symbol that assistive technology does not read, and a tone', async () => {
     relay(503)
     const w = await badge()
@@ -85,6 +92,7 @@ describe('TipConfigBadge (F9)', () => {
     expect(words(await badge())).toBe('Relay unreachable')
   })
 
+  // A host that is not https is a configuration fault, not an outage: the badge says uploads are unavailable instead of staying on "Checking".
   it('shows a configuration error for an invalid host instead of staying on "Checking relay…"', async () => {
     relay('no_tip')
     const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -94,6 +102,7 @@ describe('TipConfigBadge (F9)', () => {
     quiet.mockRestore()
   })
 
+  // A person sees no host, scheme or function name; the original error goes to the console once, for developers.
   it('shows a person only plain words for a bad relay address, and logs the detail for developers', async () => {
     relay('no_tip')
     const log = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -109,6 +118,7 @@ describe('TipConfigBadge (F9)', () => {
     log.mockRestore()
   })
 
+  // A slow answer for the previous host arrives after a newer one and must not overwrite it (the generation counter).
   it('probes again when the host changes, and ignores an older answer', async () => {
     let release!: (r: Response) => void
     const slow = new Promise<Response>((r) => (release = r))
@@ -124,6 +134,7 @@ describe('TipConfigBadge (F9)', () => {
   })
 })
 
+// A fixed set of purchase terms with distinguishable amounts (price 10 000 001 MIST, operator 9 980 001, platform 20 000), so each figure on the page can be told apart.
 const terms: PurchaseTerms = {
   network: 'testnet',
   gateId: `0x${'a1'.repeat(32)}`,
@@ -135,16 +146,20 @@ const terms: PurchaseTerms = {
   defaultUses: 10n,
 }
 
+/** cta(props): mount the prompt for a configured gate whose wallet holds no pass, with the given props on top. */
 const cta = (props: Record<string, unknown>) =>
   mount(AccessGateCta, { props: { gateConfigured: true, hasAccess: false, terms: null, ...props } })
 
+// The purchase prompt. Audit F11: the person sees the exact payment and who receives what before the wallet opens, and plain words, never a chain error.
 describe('AccessGateCta (F11)', () => {
+  // The prompt appears only for a configured gate whose ownership check said "no pass"; while the check is running (`null`) it stays hidden.
   it('is hidden unless a gate is configured and the wallet lacks a pass', () => {
     expect(cta({ gateConfigured: false, terms }).find('.wru-cta').exists()).toBe(false)
     expect(cta({ hasAccess: true, terms }).find('.wru-cta').exists()).toBe(false)
     expect(cta({ hasAccess: null, terms }).find('.wru-cta').exists()).toBe(false)
   })
 
+  // The whole price, the operator's and the platform's parts with their addresses, the network and the pass, and a button that names the price.
   it('shows the exact payment, who receives what, the network and the pass before the wallet opens', () => {
     const w = cta({ terms })
     const text = w.text()
@@ -162,6 +177,7 @@ describe('AccessGateCta (F11)', () => {
     expect(cta({ terms: { ...terms, defaultUses: 1n } }).text()).toContain('1 use,')
   })
 
+  // With no terms the button is disabled and a click emits nothing, so the wallet never opens for a price the person has not seen.
   it('cannot purchase until the terms are read', async () => {
     const w = cta({ terms: null })
     expect(w.text()).toContain('Reading the pass price from the chain…')
@@ -176,6 +192,7 @@ describe('AccessGateCta (F11)', () => {
     expect(w.get('button').attributes('disabled')).toBeDefined()
   })
 
+  // A raw RPC failure while reading the terms or purchasing reaches only the console (with the original error as the cause); the page shows the fixed plain sentence.
   it('shows a person only plain words for a raw chain error, while console.error receives the raw one', async () => {
     const raw = new Error('RPC 503: upstream connect error or disconnect/reset before headers')
     const getObject = vi.fn(async () => {
@@ -209,6 +226,7 @@ describe('AccessGateCta (F11)', () => {
     log.mockRestore()
   })
 
+  // A paused gate cannot be bought from: the button is disabled and a click emits nothing.
   it('blocks a paused gate', async () => {
     const w = cta({ terms: { ...terms, paused: true } })
     expect(w.text()).toContain('paused')

@@ -56,7 +56,7 @@
     "@axe-core/playwright": "~4.14.0",
     "@meddleware/design-tokens": "^0.1.13",
     "@meddleware/eslint-config": "^0.0.4",
-    "@meddleware/frontend-config": "^0.0.14",
+    "@meddleware/frontend-config": "^0.0.16",
     "@meddleware/ui": "^0.1.42",
     "@mysten/sui": "^2.36.0",
     "@mysten/walrus": "~1.2.35",

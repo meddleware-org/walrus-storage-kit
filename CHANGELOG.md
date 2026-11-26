@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+- The errors for an invalid or insecure relay host no longer repeat the host (it can carry a credential); they name the origin only.
+
 - Documentation: every file is annotated line by line and has a header (every declaration has a doc comment, the tests say what they prove); `CONTRIBUTING.md` added; README Development section; CLAUDE.md Gotchas and Related; the changelog names the package correctly.
 - CI: the audit step runs `npx --no-install mw-audit-gate` from `@meddleware/frontend-config` instead of a copy of the gate in `.github/` (FU-0196); same gate, same allowlist.
 - CI: the release workflow's `verify` job calls `node-ci.yml` (as `ui` does) instead of repeating every check in one job with `playwright install --with-deps`; the browser tests now run as one job per browser in Playwright's image (D129/D138). `node-ci.yml` gained the build and packed-files checks the old verify job ran, so they run on every push.

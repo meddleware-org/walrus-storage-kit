@@ -196,15 +196,29 @@ export const PUBLIC_WALRUS_RELAY_HOSTS: Record<WalrusNetwork, string> = {
 /** Hosts that may be reached over plain http (a local testbed). `URL` renders IPv6 in brackets. */
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]'])
 
+/**
+ * A URL as it may appear in an error message or a log line: its origin only (scheme, host and port). A URL can carry a credential (user and password before the host, a token or key in
+ * the path or query), so a message never repeats the whole value; a string that is not a URL is not repeated at all.
+ */
+function describeUrl(value: string): string {
+  try {
+    const { origin } = new URL(value)
+    // Schemes without a host (`data:`, `file:`) have the origin `null`.
+    return origin === 'null' ? '(an address with no host)' : origin
+  } catch {
+    return '(not a valid URL)'
+  }
+}
+
 /** Throw unless `host` is an https URL (plain http is allowed for a loopback testbed only). */
 export function requireHttpsHost(host: string, context: string): void {
   let url: URL
   try { url = new URL(host) } catch {
-    throw new Error(`${context}: invalid URL: ${host}`)
+    throw new Error(`${context}: invalid URL: ${describeUrl(host)}`)
   }
   // Production and remote hosts must use https; plain http only for loopback testing.
   const allowed = url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname))
-  if (!allowed) throw new Error(`${context}: host must use https://, got: ${host}`)
+  if (!allowed) throw new Error(`${context}: host must use https://, got: ${describeUrl(host)}`)
 }
 
 /** The lower-cased origin of an http(s) `host`, so `https://A.example/` and `https://a.example` compare equal. */

@@ -241,6 +241,12 @@ describe('host validation (F4, F12)', () => {
     expect(() => requireHttpsHost('http://localhost.evil.example', 't')).toThrow(/https/)
     expect(() => requireHttpsHost('ftp://localhost', 't')).toThrow(/https/)
     expect(() => requireHttpsHost('not a url', 't')).toThrow(/invalid URL/)
+    // The messages never repeat the value: a configured host can carry a credential (user, password, a key in the path or query).
+    for (const bad of ['http://user:s3cret@evil.example/p?token=KEY123', 'user:s3cret@']) {
+      let message = ''
+      try { requireHttpsHost(bad, 't') } catch (e) { message = (e as Error).message }
+      expect(message).not.toMatch(/s3cret|KEY123|user:|token=/)
+    }
   })
 
   it('compares hosts by origin', () => {

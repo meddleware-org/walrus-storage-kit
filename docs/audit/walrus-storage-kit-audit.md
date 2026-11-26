@@ -1007,6 +1007,13 @@ declarations and most of the test files had no doc comment, and `.gitignore`, th
 documented and every test says what it proves; `node-ci.yml` runs `npx --no-install mw-audit-gate` and the copy is removed (`.github/audit-allowlist.json` stays; the result is the same: 0 high or
 critical advisories, 0 not allowlisted). A comment before a template's root element was avoided throughout (it would make the component a fragment in a development build).
 
+### F30 — A rejected URL was repeated in an error message (a configured URL can carry a credential)
+**Severity:** Low   **Disposition:** RESOLVED (2026-11-26, unreleased)
+**Where:** `src/lib/relay.ts` (`requireHttpsHost`).
+**Issue:** both messages (`invalid URL: <host>`, `host must use https://, got: <host>`) repeated the configured relay address.
+**Impact:** an address that holds a credential (user and password before the host, an API key in the path or query) reached an error message, and so a log line, a console or a page, exactly when the address was wrong. Found by the 2026-11-26 scan for this pattern (the same class as walrus-storage-client F30).
+**Remediation / evidence:** The messages name the host by its origin through a local `describeUrl`; a string that is not a URL is not repeated. A test feeds an address with a user, a password, a path key and a token and requires that none appears in the message.
+
 ### Delta notes (A11Y lens)
 - Gate inventory: the shared sweep (axe AA and AAA in every theme × season; reflow at 320 px; 200% text; forced colours; reduced motion; keyboard incl. focus not obscured) over the nine gallery states, five browser projects in CI. The 44 px enhanced target size and screen-reader announcements are reviewed from screenshots, not automated.
 - Known exceptions: none disabled; `noKeyboard` for two static states (above).
@@ -1513,7 +1520,7 @@ Recorded 2026-11-26.
   linters, 196 tests, the gallery build, `mw-audit-gate`. Every tracked file annotated to the documentation standard (headers, doc comments on every declaration, a reason beside each statement group,
   every test saying what it proves); `CONTRIBUTING.md` added; README Development section; CLAUDE.md Gotchas and Related. Found and fixed **F29** (documentation drift; the audit gate is now
   `mw-audit-gate`, FU-0196). No defect found in the code. Re-run after editing: the same commands plus the Chromium sweep (133 passed), all passing; the diff proven comment-only apart from F29's
-  command. Verified live: npm `0.1.43` latest, consumers read from their manifests, two Dependabot pull requests open. Counts: F1 to F29.
+  command. Verified live: npm `0.1.43` latest, consumers read from their manifests, two Dependabot pull requests open. Counts: F1 to F29 (F30, a URL echoed in an error message, was added later the same day).
 
 ## Pre-save consistency checklist (this pass)
 

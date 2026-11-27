@@ -182,6 +182,10 @@ inlineMeddleware` from `@meddleware/frontend-config/vitest`) and a test that ope
 - Do not add wallet-standard imports — stay wallet-agnostic.
 - Do not add a build step — the package ships source for consumers to bundle.
 
+## Documentation rules (workspace documentation standard, D144)
+
+Every file has a header and every declaration a TSDoc comment (private declarations included); comments say why. In a Vue single-file component the header is a `//` comment just inside `<script>` (never an HTML comment before the root element in `<template>`), template notes are `<!-- -->` inside the root, and style notes are `/* */`. `node scripts/check-docs.mjs --report walrus-storage-kit` (in the workspace repository) is the gate. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Related
 
 - The audit: [`docs/audit/walrus-storage-kit-audit.md`](docs/audit/walrus-storage-kit-audit.md); how to propose a change: [`CONTRIBUTING.md`](CONTRIBUTING.md).

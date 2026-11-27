@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+## [0.1.44] - 2026-11-27
+
 - The errors for an invalid or insecure relay host no longer repeat the host (it can carry a credential); they name the origin only.
 
 - Documentation: every file is annotated line by line and has a header (every declaration has a doc comment, the tests say what they prove); `CONTRIBUTING.md` added; README Development section; CLAUDE.md Gotchas and Related; the changelog names the package correctly.
